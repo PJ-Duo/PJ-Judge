@@ -8,7 +8,16 @@ using InteractiveUtils
 using DataFrames, CSV, DecisionTree, ScikitLearn, ScikitLearn.CrossValidation, Crayons, StringDistances
 
 # ╔═╡ edafd913-3c9b-4419-9883-8ab6c2ea39b3
-dataset =  CSV.read("../data/dataset.csv", types=String, DataFrame)
+begin
+	datasetPath = "../data/dataset.csv"
+	dictionaryPath = "../data/dictionary/OPTED.csv"
+end
+
+# ╔═╡ e8b673ae-ae9f-48ed-a7bc-c54c55a46632
+dataset = CSV.read(datasetPath, types=String, DataFrame)
+
+# ╔═╡ f2b71f56-4916-4b18-8329-bca99d168aa8
+dictionary = CSV.read(dictionaryPath, types=String, DataFrame)
 
 # ╔═╡ a6a05d27-01b6-4b2c-8859-458c07b3eeb7
 println("> Status: Online! PJ-Judge is ready to serve the following: chat, train")
@@ -25,7 +34,7 @@ if which == "chat"
 		print("query> ")
 		chat = readline()
 		for (i, row) in enumerate(eachrow( dataset )) 
-			similarity = compare(lowercase(chat), lowercase(row.query), Levenshtein())
+			similarity = compare(lowercase(strip(chat)), lowercase(strip(row.query)), Levenshtein())
 				
 			if similarity >= 0.8
 				println(row.return)
@@ -36,12 +45,15 @@ if which == "chat"
 			end
 		end
 	end
-elseif which == "train"
+end
+
+# ╔═╡ 2ac1838e-e426-457a-a1de-da92d562e816
+if which == "train"
 	while true
 		print("query> ")
 		train = readline()
 		for (i, row) in enumerate(eachrow( dataset )) 
-			similarity = compare(lowercase(train), lowercase(row.query), Levenshtein())
+			similarity = compare(lowercase(strip(train)), lowercase(strip(row.query)), Levenshtein())
 
 			if similarity >= 0.8
 				println(row.return)
@@ -52,22 +64,13 @@ elseif which == "train"
             	answer = readline()
 
 				push!(dataset, [train, answer])
-            	CSV.write("../data/dataset.csv", dataset)
+            	CSV.write(datasetPath, dataset)
 				println("SUCESSS!")
 				break;
 			end
 		end
 	end
-else
-	print("NonExistent: Try again.")
 end
-
-# ╔═╡ 9edd7dad-6149-4cb5-b88a-94d46bd71870
-# ╠═╡ disabled = true
-#=╠═╡
-	input = readline()
-	
-  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -555,10 +558,12 @@ version = "1.48.0+0"
 # ╔═╡ Cell order:
 # ╠═d146a4e0-fce2-4009-93ff-05850d528ed3
 # ╠═edafd913-3c9b-4419-9883-8ab6c2ea39b3
+# ╠═e8b673ae-ae9f-48ed-a7bc-c54c55a46632
+# ╠═f2b71f56-4916-4b18-8329-bca99d168aa8
 # ╠═a6a05d27-01b6-4b2c-8859-458c07b3eeb7
 # ╠═8731c68b-d68a-4a53-9caa-7fea2915cf74
 # ╠═585657a3-34ad-4116-82cf-ee08be590ae1
 # ╠═20d1e143-f56c-45a4-953e-604b012f2ca9
-# ╠═9edd7dad-6149-4cb5-b88a-94d46bd71870
+# ╠═2ac1838e-e426-457a-a1de-da92d562e816
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
