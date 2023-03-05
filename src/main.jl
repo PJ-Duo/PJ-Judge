@@ -6,7 +6,7 @@ using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
 using DataFrames, CSV, LinearAlgebra, JSON, 
-Crayons
+Crayons, BenchmarkTools
 
 # ╔═╡ 0941c3fc-bac8-11ed-11d5-6318de0d8aec
 module Spacy
@@ -127,6 +127,25 @@ startup = readline()
 # ╔═╡ bc0847ef-dd14-4283-93b7-d226950a2798
 arr = []
 
+# ╔═╡ 885bcc7f-1625-4ad2-95bd-f593c62e1a11
+function remove_oov(doc)
+	num_spaces = length(doc) - 1
+    new_text = Vector{UInt8}(undef, length(doc.text) + num_spaces)
+    idx = 1
+    for token in doc
+        if token.is_oov
+            continue
+        end
+		if idx != 1
+            new_text[idx] = ' '
+            idx += 1
+        end
+        new_text[idx:idx+length(token.text)-1] .= codeunits(token.text)
+        idx += length(token.text)
+    end
+    String(new_text[1:idx-1])
+end
+
 # ╔═╡ bf60a9d5-4047-485e-9f91-a385703cd518
 if lowercase(startup) == "chat"
 	while true
@@ -139,14 +158,8 @@ if lowercase(startup) == "chat"
 		
 		for (i, row) in enumerate(eachrow( dataset ))
 			x = nlp(lowercase(row[1]))
-			y = nlp(lowercase(chatInput))
+			y = nlp(remove_oov(nlp(lowercase(chatInput))))
 
-			for token in y
-				if token.is_oov 
-					y = nlp(replace(y.text, token.text => ""))
-				end
-			end
-	
 			x_vector = x.vector
 			y_vector = y.vector
 	
@@ -155,7 +168,6 @@ if lowercase(startup) == "chat"
 			if nrow(dataset) == i
 				if maximum(arr) >= 0.6
 					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), dataset[findfirst(x -> x == maximum(arr), arr), 2])
-					println(arr)
 					empty!(arr)
 					break;
 				else
@@ -173,6 +185,7 @@ end
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Conda = "8f4d0f93-b110-5947-807f-2305c1781a2d"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
@@ -182,6 +195,7 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 
 [compat]
+BenchmarkTools = "~1.3.2"
 CSV = "~0.10.9"
 Conda = "~1.8.0"
 Crayons = "~4.1.1"
@@ -196,7 +210,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "5786f4fed66c09a3f8f76da1c45ca6a841241f53"
+project_hash = "4665f93689edbb9a09b1f5f325f51d5d8746a036"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -207,6 +221,12 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "d9a9701b899b30332bbcb3e1679c41cce81fb0e8"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.3.2"
 
 [[deps.CSV]]
 deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "SnoopPrecompile", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
@@ -418,6 +438,10 @@ version = "2.2.2"
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+
 [[deps.PyCall]]
 deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
 git-tree-sha1 = "62f417f6ad727987c755549e9cd88c46578da562"
@@ -558,5 +582,6 @@ version = "1.48.0+0"
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 # ╠═bc0847ef-dd14-4283-93b7-d226950a2798
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
+# ╠═885bcc7f-1625-4ad2-95bd-f593c62e1a11
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
