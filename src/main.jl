@@ -4,91 +4,190 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ d146a4e0-fce2-4009-93ff-05850d528ed3
-using DataFrames, CSV, DecisionTree, ScikitLearn, ScikitLearn.CrossValidation, Crayons, StringDistances
+# ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
+using DataFrames, CSV, LinearAlgebra, JSON, 
+Crayons
 
-# ╔═╡ edafd913-3c9b-4419-9883-8ab6c2ea39b3
-begin
-	datasetPath = "../data/dataset.csv"
-	dictionaryPath = "../data/dictionary/OPTED.csv"
+# ╔═╡ 0941c3fc-bac8-11ed-11d5-6318de0d8aec
+module Spacy
+
+using Conda
+using PyCall
+
+export spacy
+const python3 = joinpath(Conda.python_dir(Conda.ROOTENV), "python3")
+const spacy = pyimport("spacy")
+const spacyMatcher = pyimport("spacy.matcher")
+const spacyUtil = pyimport("spacy.util")
+
+function load(model::String="en_core_web_sm")
+    try
+        spacy.load(model)
+    catch ex
+        if isa(ex, PyError) && getfield(ex, :exception) == PyObject(pyimport("ImportError"))
+            run(`$python3 -m spacy download $model`)
+            spacy.load(model)
+        else
+            rethrow()
+        end
+    end
 end
 
-# ╔═╡ e8b673ae-ae9f-48ed-a7bc-c54c55a46632
-dataset = CSV.read(datasetPath, types=String, DataFrame)
+# Define language
+module language
+using PyCall
+const spacyLang = pyimport("spacy.language")
+function from_config(x)
+    spacyLang.Language.from_config(x)
+end
+function component(x, y)
+    spacyLang.Language.component(x, func=y)
+end
+end
 
-# ╔═╡ f2b71f56-4916-4b18-8329-bca99d168aa8
-dictionary = CSV.read(dictionaryPath, types=String, DataFrame)
+# Define training
+module training
+using PyCall
+const spacyLang = pyimport("spacy.language")
+function from_config(x)
+    spacyLang.Language.from_config(x)
+end
+function component(x, y)
+    spacyLang.Language.component(x, func=y)
+end
+end
 
-# ╔═╡ a6a05d27-01b6-4b2c-8859-458c07b3eeb7
-println("> Status: Online! PJ-Judge is ready to serve the following: chat, train")
+function matcher(nlp)
+    spacyMatcher.matcher(nlp)
+end
 
-# ╔═╡ 8731c68b-d68a-4a53-9caa-7fea2915cf74
-print("> ")
+function matcher_add(x, y, z)
+    if isnothing(z)
+        spacyMatcher.matcher.add(x, y, on_match=z)
+    else
+        spacyMatcher.matcher.add(x, y)
+    end
+end
 
-# ╔═╡ 585657a3-34ad-4116-82cf-ee08be590ae1
-which = readline()
+function matcher_remove(x)
+    spacyMatcher.matcher.remove(x)
+end
 
-# ╔═╡ 20d1e143-f56c-45a4-953e-604b012f2ca9
-if which == "chat"
+function matcher_get(x)
+    return spacyMatcher.matcher.get(x)
+end
+end
+
+
+# ╔═╡ 76e1dfb9-b953-422c-a06a-9d87027f9c3b
+dataset = CSV.read("../data/dataset.csv", DataFrame)
+
+# ╔═╡ e55d111b-333f-4715-89eb-5336f06c21e7
+nlp = Spacy.load("en_core_web_md")
+
+# ╔═╡ a81bbd73-5dbf-4711-bd5a-bcb716560cfd
+patterns = [
+	Dict("label" => "COMPUTER", "pattern" => [Dict("lower" => "notebook")]),
+	Dict("label" => "CURRENCY", "pattern" => [Dict("lower" => "francs")]),
+	Dict("label" => "PART", "pattern" => [Dict("lower" => "disk")]),
+	Dict("label" => "PROGLANG", "pattern" => [
+		Dict("lower" => "java"), 
+		Dict("lower" => "python"), 
+		Dict("lower" => "c++")]
+	)
+]
+
+# ╔═╡ e43bf442-39dc-44fc-b631-85402db7ddec
+ruler = nlp.add_pipe("entity_ruler")
+
+# ╔═╡ 67e05f07-2829-4d17-bf04-ae5ca3d70c62
+ruler.add_patterns(patterns)
+
+# ╔═╡ 6bfedfbb-399c-40f6-a4e1-852ffb6f38f6
+# ╠═╡ skip_as_script = true
+#=╠═╡
+lol = nlp(lowercase("""Hello I would like to order a notebook with 16GB and 256 GB disk, I would like to spend less than 1000 dollars, what would be the options. I also use Java and C++ and python as programming languages. Thanks a lot
+Porya"""))
+  ╠═╡ =#
+
+# ╔═╡ 99866c59-b08e-4892-9765-dc187dc209d1
+# ╠═╡ skip_as_script = true
+#=╠═╡
+for entity in lol.ents      
+     println("$(entity.text) ($(entity.label_))")
+end
+  ╠═╡ =#
+
+# ╔═╡ 9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
+print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = true))
+
+# ╔═╡ 2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
+startup = readline()
+
+# ╔═╡ bc0847ef-dd14-4283-93b7-d226950a2798
+arr = []
+
+# ╔═╡ bf60a9d5-4047-485e-9f91-a385703cd518
+if lowercase(startup) == "chat"
 	while true
-		print("query> ")
-		chat = readline()
-		for (i, row) in enumerate(eachrow( dataset )) 
-			similarity = compare(lowercase(strip(chat)), lowercase(strip(row.query)), Levenshtein())
-				
-			if similarity >= 0.8
-				println(row.return)
-				break;
-			elseif nrow(dataset) == i
-				println("I'm not trained enough for an answer to that...")
-				break;
+		print(Crayon(foreground = :green), Crayon(bold = true), "query> ", Crayon(reset = true))
+		chatInput = readline()
+
+		if lowercase(chatInput) == "exit"
+			break
+		end
+		
+		for (i, row) in enumerate(eachrow( dataset ))
+			x = nlp(lowercase(row[1]))
+			y = nlp(lowercase(chatInput))
+
+			for token in y
+				if token.is_oov 
+					y = nlp(replace(y.text, token.text => ""))
+				end
+			end
+	
+			x_vector = x.vector
+			y_vector = y.vector
+	
+			push!(arr, dot(x_vector, y_vector) / (norm(x_vector) * norm(y_vector)))
+
+			if nrow(dataset) == i
+				if maximum(arr) >= 0.6
+					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), dataset[findfirst(x -> x == maximum(arr), arr), 2])
+					println(arr)
+					empty!(arr)
+					break;
+				else
+					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), "Sorry, I'm not trained enough to answer that question.")
+					empty!(arr)
+					break;
+				end
 			end
 		end
 	end
-end
-
-# ╔═╡ 2ac1838e-e426-457a-a1de-da92d562e816
-if which == "train"
-	while true
-		print("query> ")
-		train = readline()
-		for (i, row) in enumerate(eachrow( dataset )) 
-			similarity = compare(lowercase(strip(train)), lowercase(strip(row.query)), Levenshtein())
-
-			if similarity >= 0.8
-				println(row.return)
-				break;
-			elseif nrow(dataset) == i
-				println("I don't know the answer to that... What should be the response?")
-				print("return> ")
-            	answer = readline()
-
-				push!(dataset, [train, answer])
-            	CSV.write(datasetPath, dataset)
-				println("SUCESSS!")
-				break;
-			end
-		end
-	end
+elseif lowercase(startup) == "exit"
+	exit()
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+Conda = "8f4d0f93-b110-5947-807f-2305c1781a2d"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-DecisionTree = "7806a523-6efd-50cb-b5f6-3fa6f1930dbb"
-ScikitLearn = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
-StringDistances = "88034a9c-02f8-509d-84a9-84ec65e18404"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 
 [compat]
 CSV = "~0.10.9"
+Conda = "~1.8.0"
 Crayons = "~4.1.1"
 DataFrames = "~1.5.0"
-DecisionTree = "~0.12.3"
-ScikitLearn = "~0.7.0"
-StringDistances = "~0.11.2"
+JSON = "~0.21.3"
+PyCall = "~1.95.1"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -97,12 +196,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "d18786e0f043dc95049fd95f6956ba2bf2d85e0f"
-
-[[deps.AbstractTrees]]
-git-tree-sha1 = "faa260e4cb5aba097a73fab382dd4b5819d8ec8c"
-uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-version = "0.4.4"
+project_hash = "5786f4fed66c09a3f8f76da1c45ca6a841241f53"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -119,18 +213,6 @@ deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers
 git-tree-sha1 = "c700cce799b51c9045473de751e9319bdd1c6e94"
 uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 version = "0.10.9"
-
-[[deps.ChainRulesCore]]
-deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "c6d890a52d2c4d55d326439580c3b8d0875a77d9"
-uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.15.7"
-
-[[deps.ChangesOfVariables]]
-deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
-git-tree-sha1 = "485193efd2176b88e6622a39a246f8c5b600e74e"
-uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
-version = "0.1.6"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -186,32 +268,6 @@ version = "1.0.0"
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
-[[deps.DecisionTree]]
-deps = ["AbstractTrees", "DelimitedFiles", "LinearAlgebra", "Random", "ScikitLearnBase", "Statistics"]
-git-tree-sha1 = "c6475a3ccad06cb1c2ebc0740c1bb4fe5a0731b7"
-uuid = "7806a523-6efd-50cb-b5f6-3fa6f1930dbb"
-version = "0.12.3"
-
-[[deps.DelimitedFiles]]
-deps = ["Mmap"]
-uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-
-[[deps.Distances]]
-deps = ["LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "3258d0659f812acde79e8a74b11f17ac06d0ca04"
-uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-version = "0.10.7"
-
-[[deps.Distributed]]
-deps = ["Random", "Serialization", "Sockets"]
-uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
-
-[[deps.DocStringExtensions]]
-deps = ["LibGit2"]
-git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
-uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-version = "0.9.3"
-
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
@@ -246,26 +302,10 @@ version = "1.4.0"
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
-[[deps.InverseFunctions]]
-deps = ["Test"]
-git-tree-sha1 = "49510dfcb407e572524ba94aeae2fced1f3feb0f"
-uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
-version = "0.1.8"
-
 [[deps.InvertedIndices]]
 git-tree-sha1 = "82aec7a3dd64f4d9584659dc0b62ef7db2ef3e19"
 uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
 version = "1.2.0"
-
-[[deps.IrrationalConstants]]
-git-tree-sha1 = "3868cac300a188a7c3a74f9abd930e52ce1a7a51"
-uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
-version = "0.2.1"
-
-[[deps.IterTools]]
-git-tree-sha1 = "fa6287a4469f5e048d763df38279ee729fbd44e5"
-uuid = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
-version = "1.4.0"
 
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -293,10 +333,6 @@ deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
 version = "7.84.0+0"
 
-[[deps.LibGit2]]
-deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
-uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
-
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
@@ -308,12 +344,6 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-
-[[deps.LogExpFunctions]]
-deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "0a1b7c2863e44523180fdb3146534e265a91870b"
-uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.23"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -360,17 +390,11 @@ git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "1.4.1"
 
-[[deps.Parameters]]
-deps = ["OrderedCollections", "UnPack"]
-git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
-uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
-version = "0.12.3"
-
 [[deps.Parsers]]
 deps = ["Dates", "SnoopPrecompile"]
-git-tree-sha1 = "6f4fbcd1ad45905a5dee3f4256fabb49aa2110c6"
+git-tree-sha1 = "478ac6c952fddd4399e71d4779797c538d0ff2bf"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.5.7"
+version = "2.5.8"
 
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
@@ -417,18 +441,6 @@ version = "1.2.2"
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
 
-[[deps.ScikitLearn]]
-deps = ["Compat", "Conda", "DataFrames", "Distributed", "IterTools", "LinearAlgebra", "MacroTools", "Parameters", "Printf", "PyCall", "Random", "ScikitLearnBase", "SparseArrays", "StatsBase", "VersionParsing"]
-git-tree-sha1 = "3df098033358431591827bb86cada0bed744105a"
-uuid = "3646fa90-6ef7-5e7e-9f22-8aca16db6324"
-version = "0.7.0"
-
-[[deps.ScikitLearnBase]]
-deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "7877e55c1523a4b336b433da39c8e8c08d2f221f"
-uuid = "6e75b9c4-186b-50bd-896f-2d2496a4843e"
-version = "0.5.0"
-
 [[deps.SentinelArrays]]
 deps = ["Dates", "Random"]
 git-tree-sha1 = "77d3c4726515dca71f6d80fbb5e251088defe305"
@@ -460,24 +472,6 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-
-[[deps.StatsAPI]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "f9af7f195fb13589dd2e2d57fdb401717d2eb1f6"
-uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
-version = "1.5.0"
-
-[[deps.StatsBase]]
-deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
-uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.33.21"
-
-[[deps.StringDistances]]
-deps = ["Distances", "StatsAPI"]
-git-tree-sha1 = "ceeef74797d961aee825aabf71446d6aba898acb"
-uuid = "88034a9c-02f8-509d-84a9-84ec65e18404"
-version = "0.11.2"
 
 [[deps.StringManipulation]]
 git-tree-sha1 = "46da2434b41f41ac3594ee9816ce5541c6096123"
@@ -515,11 +509,6 @@ version = "0.9.11"
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
-[[deps.UnPack]]
-git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
-uuid = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
-version = "1.0.2"
-
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
@@ -556,14 +545,18 @@ version = "1.48.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═d146a4e0-fce2-4009-93ff-05850d528ed3
-# ╠═edafd913-3c9b-4419-9883-8ab6c2ea39b3
-# ╠═e8b673ae-ae9f-48ed-a7bc-c54c55a46632
-# ╠═f2b71f56-4916-4b18-8329-bca99d168aa8
-# ╠═a6a05d27-01b6-4b2c-8859-458c07b3eeb7
-# ╠═8731c68b-d68a-4a53-9caa-7fea2915cf74
-# ╠═585657a3-34ad-4116-82cf-ee08be590ae1
-# ╠═20d1e143-f56c-45a4-953e-604b012f2ca9
-# ╠═2ac1838e-e426-457a-a1de-da92d562e816
+# ╠═13f35ab2-2f4f-4f93-95f4-f5043631da83
+# ╠═0941c3fc-bac8-11ed-11d5-6318de0d8aec
+# ╠═76e1dfb9-b953-422c-a06a-9d87027f9c3b
+# ╠═e55d111b-333f-4715-89eb-5336f06c21e7
+# ╠═a81bbd73-5dbf-4711-bd5a-bcb716560cfd
+# ╠═e43bf442-39dc-44fc-b631-85402db7ddec
+# ╠═67e05f07-2829-4d17-bf04-ae5ca3d70c62
+# ╠═6bfedfbb-399c-40f6-a4e1-852ffb6f38f6
+# ╠═99866c59-b08e-4892-9765-dc187dc209d1
+# ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
+# ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
+# ╠═bc0847ef-dd14-4283-93b7-d226950a2798
+# ╠═bf60a9d5-4047-485e-9f91-a385703cd518
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
