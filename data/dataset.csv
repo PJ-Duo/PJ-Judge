@@ -68,6 +68,55 @@ What's the capital of Germany?,Berlin
 What's the capital of Italy?,Rome
 What's the capital of Spain?,Madrid
 What's the capital of Turkey?,Ankara
+"What is the meaning of life?","The meaning of life is a philosophical question that has no single definitive answer, and is subject to individual interpretation and belief."
+"What is happiness?","Happiness is a subjective feeling of well-being, contentment, and satisfaction with one's life and circumstances."
+"What is success?","Success is the achievement of a desired goal or outcome, usually through hard work, skill, and perseverance."
+"What is love?","Love is a complex emotion and set of behaviors that involves affection, attachment, caring, and intimacy with another person."
+"What is friendship?","Friendship is a close relationship between two or more people who share common interests, values, and experiences, and who support and care for each other."
+"What is family?","Family is a group of individuals who are related by blood, marriage, or adoption, and who share a sense of mutual obligation, support, and identity."
+"What is education?","Education is the process of acquiring knowledge, skills, values, and attitudes through formal or informal learning experiences."
+"What is a career?","A career is a chosen profession or occupation that provides a means of livelihood and personal fulfillment over the course of one's working life."
+"What is a hobby?","A hobby is a leisure activity or interest pursued for enjoyment, relaxation, or personal satisfaction, often outside of one's main occupation or responsibilities."
+"What is personal growth?","Personal growth is the process of developing one's self-awareness, knowledge, skills, and potential for personal and professional success."
+"What is self-care?","Self-care is the practice of taking deliberate actions to promote physical, mental, and emotional health and well-being."
+"What is spirituality?","Spirituality is a belief system or set of practices that seeks to connect individuals with something larger than themselves, often involving a higher power or divine force."
+"What is religion?","Religion is a set of beliefs, values, and practices that involve a relationship with a higher power or divine force, and that provide a framework for understanding the meaning and purpose of life."
+"What is community?","Community is a group of individuals who share common interests, values, and goals, and who support and collaborate with each other to achieve shared objectives."
+"What is communication?","Communication is the process of exchanging information, ideas, and emotions through verbal and nonverbal channels, often with the goal of conveying meaning and establishing understanding."
+"What is teamwork?","Teamwork is the ability of individuals to work collaboratively and effectively with others towards a common goal, often requiring strong communication, trust, and cooperation."
+"What is time management?","Time management is the practice of organizing and prioritizing one's time and tasks to maximize productivity, efficiency, and effectiveness."
+"What is stress management?","Stress management is the practice of identifying, managing, and reducing the sources and effects of stress in one's life, often through self-care, relaxation techniques, and coping strategies."
+"What is goal setting?","Goal setting is the process of defining specific, measurable, achievable, relevant, and time-bound objectives, often used to motivate and guide personal or professional development."
+"What is decision-making?","Decision-making is the process of choosing among different options or courses of action based on a set of criteria, often involving analysis, evaluation, and judgment."
+"What is conflict resolution?","Conflict resolution is the process of managing and resolving conflicts or disagreements between individuals or groups, often requiring negotiation, mediation, or compromise."
+"What is forgiveness?","Forgiveness is the act of letting go of anger, resentment, or blame towards another person, often involving a decision to move forward and restore or rebuild a relationship."
+"What does HTML stand for?","HyperText Markup Language"
+"What is the latest version of HTML?","HTML5"
+"What is the purpose of HTML?","To create web pages and web applications"
+"What is a tag in HTML?","A tag is a code element used to define an HTML document structure or content"
+"What is an attribute in HTML?","An attribute provides additional information about an HTML element"
+"What is the syntax for creating an HTML tag?","<tagname>"
+"What is the syntax for closing an HTML tag?","</tagname>"
+"What is the purpose of the <head> tag in HTML?","To contain information about the HTML document, such as the title and meta data"
+"What is the purpose of the <body> tag in HTML?","To contain the content of the HTML document that is displayed in the browser"
+"What is the purpose of the <title> tag in HTML?","To define the title of the HTML document that appears in the browser tab"
+"What is the purpose of the <meta> tag in HTML?","To provide metadata about the HTML document, such as keywords and descriptions for search engines"
+"What is the purpose of the <h1> to <h6> tags in HTML?","To define different levels of headings"
+"What is the purpose of the <p> tag in HTML?","To define a paragraph of text"
+"What is the purpose of the <a> tag in HTML?","To create a hyperlink to another web page or resource"
+"What is the purpose of the href attribute in the <a> tag?","To specify the URL of the web page or resource being linked to"
+"What is the purpose of the target attribute in the <a> tag?","To specify where the linked web page or resource should be displayed, such as in a new window or the same window"
+"What is the purpose of the <img> tag in HTML?","To display an image on a web page"
+"What is the purpose of the src attribute in the <img> tag?","To specify the URL of the image file to be displayed"
+"What is the purpose of the alt attribute in the <img> tag?","To provide alternative text for the image for accessibility purposes"
+"What is the purpose of the <ol> tag in HTML?","To create an ordered list"
+"What is the purpose of the <ul> tag in HTML?","To create an unordered list"
+"What is the purpose of the <li> tag in HTML?","To define a list item"
+"What is the purpose of the <table> tag in HTML?","To create a table on a web page"
+"What is the purpose of the <tr> tag in HTML?","To define a row in a table"
+"What is the purpose of the <th> tag in HTML?","To define a table header cell"
+"What is the purpose of the <td> tag in HTML?","To define a table data cell"
+"What is the purpose of the <form> tag in HTML?","To create a form on a web page for user input"
 Write me the HTML skeleton,"Alright! Here you go:
     <html>
         <head>
@@ -76,4 +125,5 @@ Write me the HTML skeleton,"Alright! Here you go:
     
         <body>
         </body>
-    </html>"
+    </html>
+"
