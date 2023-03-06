@@ -91,10 +91,13 @@ patterns = [
 	Dict("label" => "CURRENCY", "pattern" => [Dict("lower" => "francs")]),
 	Dict("label" => "PART", "pattern" => [Dict("lower" => "disk")]),
 	Dict("label" => "PROGLANG", "pattern" => [
-		Dict("lower" => "java"), 
 		Dict("lower" => "python"), 
-		Dict("lower" => "c++")]
-	)
+		Dict("lower" => "javascript"),
+		Dict("lower" => "java"),
+		Dict("lower" => "c++")
+	]),
+	Dict("label" => "MARKUPLANG", "pattern" => [Dict("lower" => "html")]),
+	Dict("label" => "STYLELANG", "pattern" => [Dict("lower" => "css")])
 ]
 
 # ╔═╡ e43bf442-39dc-44fc-b631-85402db7ddec
@@ -155,19 +158,24 @@ if lowercase(startup) == "chat"
 		if lowercase(chatInput) == "exit"
 			break
 		end
+
+		y = nlp(remove_oov(nlp(lowercase(chatInput))))
 		
-		for (i, row) in enumerate(eachrow( dataset ))
+		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in y.ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
+
+		println(filtered_ds)
+		
+		if nrow(filtered_ds) == 0
+    		filtered_ds = dataset
+		end
+		
+		for (i, row) in enumerate(eachrow(filtered_ds))
 			x = nlp(lowercase(row[1]))
-			y = nlp(remove_oov(nlp(lowercase(chatInput))))
-
-			x_vector = x.vector
-			y_vector = y.vector
-	
-			push!(arr, dot(x_vector, y_vector) / (norm(x_vector) * norm(y_vector)))
-
-			if nrow(dataset) == i
-				if maximum(arr) >= 0.6
-					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), dataset[findfirst(x -> x == maximum(arr), arr), 2])
+			
+			push!(arr, dot(x.vector, y.vector) / (norm(x.vector) * norm(y.vector)))
+			if nrow(filtered_ds) == i
+				if maximum(arr) >= 0.7
+					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), filtered_ds[findfirst(x -> x == maximum(arr), arr), 2])
 					empty!(arr)
 					break;
 				else
@@ -210,7 +218,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "4665f93689edbb9a09b1f5f325f51d5d8746a036"
+project_hash = "8bf74e53d78c017c87d19c96c3a7ebdce28c0ff5"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
