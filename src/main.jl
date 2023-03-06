@@ -211,7 +211,7 @@ PyCall = "~1.95.1"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.5"
+julia_version = "1.8.0"
 manifest_format = "2.0"
 project_hash = "8bf74e53d78c017c87d19c96c3a7ebdce28c0ff5"
 
@@ -252,7 +252,7 @@ version = "4.6.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.1+0"
+version = "0.5.2+0"
 
 [[deps.Conda]]
 deps = ["Downloads", "JSON", "VersionParsing"]
