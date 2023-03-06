@@ -109,8 +109,7 @@ ruler.add_patterns(patterns)
 # ╔═╡ 6bfedfbb-399c-40f6-a4e1-852ffb6f38f6
 # ╠═╡ skip_as_script = true
 #=╠═╡
-lol = nlp(lowercase("""Hello I would like to order a notebook with 16GB and 256 GB disk, I would like to spend less than 1000 dollars, what would be the options. I also use Java and C++ and python as programming languages. Thanks a lot
-Porya"""))
+lol = nlp(lowercase("""s"""))
   ╠═╡ =#
 
 # ╔═╡ 99866c59-b08e-4892-9765-dc187dc209d1
@@ -126,9 +125,6 @@ print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = tru
 
 # ╔═╡ 2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 startup = readline()
-
-# ╔═╡ bc0847ef-dd14-4283-93b7-d226950a2798
-arr = []
 
 # ╔═╡ 885bcc7f-1625-4ad2-95bd-f593c62e1a11
 function remove_oov(doc)
@@ -166,19 +162,20 @@ if lowercase(startup) == "chat"
 		if nrow(filtered_ds) == 0
     		filtered_ds = dataset
 		end
-		
+
+		sim_arr = []
 		for (i, row) in enumerate(eachrow(filtered_ds))
 			x = nlp(lowercase(row[1]))
 			
-			push!(arr, dot(x.vector, y.vector) / (norm(x.vector) * norm(y.vector)))
+			push!(sim_arr, dot(x.vector, y.vector) / (norm(x.vector) * norm(y.vector)))
 			if nrow(filtered_ds) == i
-				if maximum(arr) >= 0.7
-					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), filtered_ds[findfirst(x -> x == maximum(arr), arr), 2])
-					empty!(arr)
+				if maximum(sim_arr) >= 0.75
+					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2])
+					empty!(sim_arr)
 					break;
 				else
 					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), "Sorry, I'm not trained enough to answer that question.")
-					empty!(arr)
+					empty!(sim_arr)
 					break;
 				end
 			end
@@ -586,7 +583,6 @@ version = "1.48.0+0"
 # ╠═99866c59-b08e-4892-9765-dc187dc209d1
 # ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
-# ╠═bc0847ef-dd14-4283-93b7-d226950a2798
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
 # ╠═885bcc7f-1625-4ad2-95bd-f593c62e1a11
 # ╟─00000000-0000-0000-0000-000000000001
