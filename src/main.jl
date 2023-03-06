@@ -162,8 +162,6 @@ if lowercase(startup) == "chat"
 		y = nlp(remove_oov(nlp(lowercase(chatInput))))
 		
 		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in y.ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
-
-		println(filtered_ds)
 		
 		if nrow(filtered_ds) == 0
     		filtered_ds = dataset
