@@ -5,8 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
-using DataFrames, CSV, LinearAlgebra, JSON, 
-Crayons, BenchmarkTools
+using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools
 
 # ╔═╡ 0941c3fc-bac8-11ed-11d5-6318de0d8aec
 module Spacy
@@ -18,7 +17,8 @@ export spacy
 const python3 = joinpath(Conda.python_dir(Conda.ROOTENV), "python3")
 const spacy = pyimport("spacy")
 const spacyMatcher = pyimport("spacy.matcher")
-const spacyUtil = pyimport("spacy.util")
+const spacyPipe = pyimport("spacy.pipeline")
+const spacyLang = pyimport("spacy.language")
 
 function load(model::String="en_core_web_sm")
     try
@@ -45,22 +45,6 @@ function component(x, y)
 end
 end
 
-# Define training
-module training
-using PyCall
-const spacyLang = pyimport("spacy.language")
-function from_config(x)
-    spacyLang.Language.from_config(x)
-end
-function component(x, y)
-    spacyLang.Language.component(x, func=y)
-end
-end
-
-function matcher(nlp)
-    spacyMatcher.matcher(nlp)
-end
-
 function matcher_add(x, y, z)
     if isnothing(z)
         spacyMatcher.matcher.add(x, y, on_match=z)
@@ -76,6 +60,10 @@ end
 function matcher_get(x)
     return spacyMatcher.matcher.get(x)
 end
+
+function EntityRuler(x)
+	spacyPipe.EntityRuler(x, overwrite_ents=true)
+end
 end
 
 
@@ -87,36 +75,43 @@ nlp = Spacy.load("en_core_web_md")
 
 # ╔═╡ a81bbd73-5dbf-4711-bd5a-bcb716560cfd
 patterns = [
-	Dict("label" => "COMPUTER", "pattern" => [Dict("lower" => "notebook")]),
-	Dict("label" => "CURRENCY", "pattern" => [Dict("lower" => "francs")]),
-	Dict("label" => "PART", "pattern" => [Dict("lower" => "disk")]),
-	Dict("label" => "PROGLANG", "pattern" => [
-		Dict("lower" => "python"), 
-		Dict("lower" => "javascript"),
-		Dict("lower" => "java"),
-		Dict("lower" => "c++")
-	]),
+	Dict("label" => "CAPI", "pattern" => [Dict("lower" => "capital")]),
+	Dict("label" => "ORG", "pattern" => [Dict("lower" => "github")]),
+	Dict("label" => "PROGLANG", "pattern" => [Dict("lower" => "c++")]),
+	Dict("label" => "PROGLANG", "pattern" => [Dict("lower" => "python")]),
+	Dict("label" => "PROGLANG", "pattern" => [Dict("lower" => "javascript")]),
+	Dict("label" => "WEBSITE", "pattern" => [Dict("lower" => "liemcomputing")]),
+	Dict("label" => "WEBSITE", "pattern" => [Dict("lower" => "youtube")]),
+	Dict("label" => "WEBSITE", "pattern" => [Dict("lower" => "twitter")]),
 	Dict("label" => "MARKUPLANG", "pattern" => [Dict("lower" => "html")]),
 	Dict("label" => "STYLELANG", "pattern" => [Dict("lower" => "css")])
 ]
 
-# ╔═╡ e43bf442-39dc-44fc-b631-85402db7ddec
-ruler = nlp.add_pipe("entity_ruler")
+# ╔═╡ 1059e83e-ddd9-47f2-a967-eaa794e9fe13
+ent_config = Dict(
+	"overwrite_ents" => "true",
+	"validate" => "true"
+)
 
-# ╔═╡ 67e05f07-2829-4d17-bf04-ae5ca3d70c62
-ruler.add_patterns(patterns)
+# ╔═╡ e43bf442-39dc-44fc-b631-85402db7ddec
+try
+	nlp.add_pipe("entity_ruler", name="pattern++", config=ent_config).add_patterns(patterns)
+catch
+	nlp.remove_pipe("pattern++")
+	nlp.add_pipe("entity_ruler", name="pattern++", config=ent_config).add_patterns(patterns)
+end
 
 # ╔═╡ 6bfedfbb-399c-40f6-a4e1-852ffb6f38f6
 # ╠═╡ skip_as_script = true
 #=╠═╡
-lol = nlp(lowercase("""s"""))
+lol = nlp(lowercase("Github"))
   ╠═╡ =#
 
 # ╔═╡ 99866c59-b08e-4892-9765-dc187dc209d1
 # ╠═╡ skip_as_script = true
 #=╠═╡
 for entity in lol.ents      
-     println("$(entity.text) ($(entity.label_))")
+    println("$(entity.text) ($(entity.label_))")
 end
   ╠═╡ =#
 
@@ -126,23 +121,25 @@ print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = tru
 # ╔═╡ 2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 startup = readline()
 
-# ╔═╡ 885bcc7f-1625-4ad2-95bd-f593c62e1a11
-function remove_oov(doc)
-	num_spaces = length(doc) - 1
-    new_text = Vector{UInt8}(undef, length(doc.text) + num_spaces)
+# ╔═╡ 93646e28-4480-4b5a-b149-53e295fc672e
+# rm out-of-vocab word(s) & punctuation(s)
+function rm_oov_punc(doc)
+	num_tokens = length(doc)
+    new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
     idx = 1
-    for token in doc
+    for (i, token) in enumerate(doc)
         if token.is_oov
             continue
         end
-		if idx != 1
+        new_text[idx:idx+length(token.text)-1] .= codeunits(token.text)
+        idx += length(token.text)
+        if i < num_tokens
             new_text[idx] = ' '
             idx += 1
         end
-        new_text[idx:idx+length(token.text)-1] .= codeunits(token.text)
-        idx += length(token.text)
     end
-    String(new_text[1:idx-1])
+	
+	return fdoc = nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
 end
 
 # ╔═╡ bf60a9d5-4047-485e-9f91-a385703cd518
@@ -155,21 +152,21 @@ if lowercase(startup) == "chat"
 			break
 		end
 
-		y = nlp(remove_oov(nlp(lowercase(chatInput))))
+		y = rm_oov_punc(nlp(lowercase(chatInput)))
 		
 		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in y.ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
+
+		println(filtered_ds)
 		
-		if nrow(filtered_ds) == 0
-    		filtered_ds = dataset
-		end
+		filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
 
 		sim_arr = []
 		for (i, row) in enumerate(eachrow(filtered_ds))
-			x = nlp(lowercase(row[1]))
+			x = rm_oov_punc(nlp(lowercase(row[1])))
 			
 			push!(sim_arr, dot(x.vector, y.vector) / (norm(x.vector) * norm(y.vector)))
 			if nrow(filtered_ds) == i
-				if maximum(sim_arr) >= 0.75
+				if maximum(sim_arr) >= 0.7
 					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2])
 					empty!(sim_arr)
 					break;
@@ -193,7 +190,6 @@ CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Conda = "8f4d0f93-b110-5947-807f-2305c1781a2d"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 
@@ -203,7 +199,6 @@ CSV = "~0.10.9"
 Conda = "~1.8.0"
 Crayons = "~4.1.1"
 DataFrames = "~1.5.0"
-JSON = "~0.21.3"
 PyCall = "~1.95.1"
 """
 
@@ -213,7 +208,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "8bf74e53d78c017c87d19c96c3a7ebdce28c0ff5"
+project_hash = "e6945a7987d711929fdad7e19b50f7b70bc2a0d9"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -577,13 +572,13 @@ version = "1.48.0+0"
 # ╠═76e1dfb9-b953-422c-a06a-9d87027f9c3b
 # ╠═e55d111b-333f-4715-89eb-5336f06c21e7
 # ╠═a81bbd73-5dbf-4711-bd5a-bcb716560cfd
+# ╠═1059e83e-ddd9-47f2-a967-eaa794e9fe13
 # ╠═e43bf442-39dc-44fc-b631-85402db7ddec
-# ╠═67e05f07-2829-4d17-bf04-ae5ca3d70c62
 # ╠═6bfedfbb-399c-40f6-a4e1-852ffb6f38f6
 # ╠═99866c59-b08e-4892-9765-dc187dc209d1
 # ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
-# ╠═885bcc7f-1625-4ad2-95bd-f593c62e1a11
+# ╠═93646e28-4480-4b5a-b149-53e295fc672e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
