@@ -21,7 +21,16 @@ TRAIN_DATA = [('what is the price of polo?', {'entities': [(21, 25, 'PrdName')]}
               ('what is the price of keyboad?', {'entities': [(21, 28, 'PrdName')]}), 
               ('what is the price of chair?', {'entities': [(21, 26, 'PrdName')]}), 
               ('what is the price of table?', {'entities': [(21, 26, 'PrdName')]}), 
-              ('what is the price of watch?', {'entities': [(21, 26, 'PrdName')]})]
+              ('what is the price of watch?', {'entities': [(21, 26, 'PrdName')]}),
+              ('My favourite website is youtube', {'entities': [(23,30,'WEBSITE')]})
+              ('My favourite website is stackoverflow', {'entities': [(23,36,'WEBSITE')]})
+              ('My favourite website is github', {'entities': [(23,29,'WEBSITE')]})
+              ('My favourite website is instagram', {'entities': [(23,31,'WEBSITE')]})
+              ('My favourite website is liemcomputing', {'entities': [(23,36,'WEBSITE')]})
+
+
+
+
 
 
 def train_spacy(data,iterations):
