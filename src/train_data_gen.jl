@@ -8,7 +8,7 @@ const python3 = joinpath(Conda.python_dir(Conda.ROOTENV), "python3")
 const spacy = pyimport("spacy")
 const spacyTokens = pyimport("spacy.tokens")
 
-function blank(model::String="en_core_web_sm")
+function blank(model::String="en_core_web_md")
   spacy.blank(model)
 end
 
