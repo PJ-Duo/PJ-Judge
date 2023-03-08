@@ -26,7 +26,7 @@ TRAIN_DATA = [('what is the price of polo?', {'entities': [(21, 25, 'PrdName')]}
               ('My favourite website is stackoverflow', {'entities': [(23,36,'WEBSITE')]})
               ('My favourite website is github', {'entities': [(23,29,'WEBSITE')]})
               ('My favourite website is instagram', {'entities': [(23,31,'WEBSITE')]})
-              ('My favourite website is liemcomputing', {'entities': [(23,36,'WEBSITE')]})
+              ('My favourite website is liemcomputing', {'entities': [(23,36,'WEBSITE')]})]
 
 
 
