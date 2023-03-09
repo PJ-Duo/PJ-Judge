@@ -9,9 +9,7 @@ using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools
 
 # ╔═╡ 0941c3fc-bac8-11ed-11d5-6318de0d8aec
 module Spacy
-
-using Conda
-using PyCall
+using Conda, PyCall
 
 export spacy
 const python3 = joinpath(Conda.python_dir(Conda.ROOTENV), "python3")
@@ -64,8 +62,7 @@ end
 function EntityRuler(x)
 	spacyPipe.EntityRuler(x, overwrite_ents=true)
 end
-end
-
+end # End of Spacy Module
 
 # ╔═╡ 76e1dfb9-b953-422c-a06a-9d87027f9c3b
 dataset = CSV.read("../data/dataset.csv", DataFrame)
@@ -101,20 +98,6 @@ catch
 	nlp.add_pipe("entity_ruler", name="pattern++", config=ent_config).add_patterns(patterns)
 end
 
-# ╔═╡ 6bfedfbb-399c-40f6-a4e1-852ffb6f38f6
-# ╠═╡ skip_as_script = true
-#=╠═╡
-lol = nlp(lowercase("Github"))
-  ╠═╡ =#
-
-# ╔═╡ 99866c59-b08e-4892-9765-dc187dc209d1
-# ╠═╡ skip_as_script = true
-#=╠═╡
-for entity in lol.ents      
-    println("$(entity.text) ($(entity.label_))")
-end
-  ╠═╡ =#
-
 # ╔═╡ 9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = true))
 
@@ -139,8 +122,9 @@ function rm_oov_punc(doc)
         end
     end
 	
-	return fdoc = nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
+	return nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
 end
+
 
 # ╔═╡ bf60a9d5-4047-485e-9f91-a385703cd518
 if lowercase(startup) == "chat"
@@ -206,7 +190,7 @@ PyCall = "~1.95.1"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0"
+julia_version = "1.8.5"
 manifest_format = "2.0"
 project_hash = "e6945a7987d711929fdad7e19b50f7b70bc2a0d9"
 
@@ -247,7 +231,7 @@ version = "4.6.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.5.2+0"
+version = "1.0.1+0"
 
 [[deps.Conda]]
 deps = ["Downloads", "JSON", "VersionParsing"]
@@ -574,8 +558,6 @@ version = "1.48.0+0"
 # ╠═a81bbd73-5dbf-4711-bd5a-bcb716560cfd
 # ╠═1059e83e-ddd9-47f2-a967-eaa794e9fe13
 # ╠═e43bf442-39dc-44fc-b631-85402db7ddec
-# ╠═6bfedfbb-399c-40f6-a4e1-852ffb6f38f6
-# ╠═99866c59-b08e-4892-9765-dc187dc209d1
 # ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
