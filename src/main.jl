@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
-using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools
+using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random
 
 # ╔═╡ 0941c3fc-bac8-11ed-11d5-6318de0d8aec
 module Spacy
@@ -98,6 +98,19 @@ catch
 	nlp.add_pipe("entity_ruler", name="pattern++", config=ent_config).add_patterns(patterns)
 end
 
+# ╔═╡ 16e48e9f-7d8e-4693-88b7-8add936fbf62
+vocab_data = Dict(
+    "liemcomputing" => rand(-1:1, 300),
+    "porya" => rand(-1:1, 300),
+    "jaiden" => rand(-1:1, 300)
+)
+
+# ╔═╡ da6eb0db-0970-4fd1-92bc-d7e9980e7354
+# Attach custom word(s) to the vocab
+for (word, vector) in vocab_data
+    nlp.vocab.set_vector(word, vector)
+end
+
 # ╔═╡ 9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = true))
 
@@ -107,6 +120,7 @@ startup = readline()
 # ╔═╡ 93646e28-4480-4b5a-b149-53e295fc672e
 # rm out-of-vocab word(s) & punctuation(s)
 function rm_oov_punc(doc)
+	ignore_list = []
 	num_tokens = length(doc)
     new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
     idx = 1
@@ -126,6 +140,24 @@ function rm_oov_punc(doc)
 end
 
 
+# ╔═╡ bb3b9f77-0f95-45c0-bb3c-affd439d81c9
+# lemmatize nlp sentence
+function lemmatize(doc) 
+	num_tokens = length(doc)
+	new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
+	idx = 1
+	for (i, token) in enumerate(doc)
+		new_text[idx:idx+length(token.lemma_)-1] .= codeunits(token.lemma_)
+		idx += length(token.lemma_)
+		if i < num_tokens
+            new_text[idx] = ' '
+            idx += 1
+        end
+	end
+
+	return nlp(String(new_text[1:idx-1]))
+end
+
 # ╔═╡ bf60a9d5-4047-485e-9f91-a385703cd518
 if lowercase(startup) == "chat"
 	while true
@@ -136,21 +168,19 @@ if lowercase(startup) == "chat"
 			break
 		end
 
-		y = rm_oov_punc(nlp(lowercase(chatInput)))
+		y = lemmatize(rm_oov_punc(nlp(lowercase(chatInput))))
 		
 		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in y.ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
 
-		println(filtered_ds)
-		
 		filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
 
 		sim_arr = []
 		for (i, row) in enumerate(eachrow(filtered_ds))
-			x = rm_oov_punc(nlp(lowercase(row[1])))
+			x = lemmatize(rm_oov_punc(nlp(lowercase(row[1]))))
 			
 			push!(sim_arr, dot(x.vector, y.vector) / (norm(x.vector) * norm(y.vector)))
 			if nrow(filtered_ds) == i
-				if maximum(sim_arr) >= 0.7
+				if maximum(sim_arr) >= 0.65
 					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2])
 					empty!(sim_arr)
 					break;
@@ -176,6 +206,7 @@ Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [compat]
 BenchmarkTools = "~1.3.2"
@@ -192,7 +223,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "e6945a7987d711929fdad7e19b50f7b70bc2a0d9"
+project_hash = "a690e807ae74196b5c0b13a6f673bbc251dfc182"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -558,9 +589,12 @@ version = "1.48.0+0"
 # ╠═a81bbd73-5dbf-4711-bd5a-bcb716560cfd
 # ╠═1059e83e-ddd9-47f2-a967-eaa794e9fe13
 # ╠═e43bf442-39dc-44fc-b631-85402db7ddec
+# ╠═16e48e9f-7d8e-4693-88b7-8add936fbf62
+# ╠═da6eb0db-0970-4fd1-92bc-d7e9980e7354
 # ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
 # ╠═93646e28-4480-4b5a-b149-53e295fc672e
+# ╠═bb3b9f77-0f95-45c0-bb3c-affd439d81c9
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
