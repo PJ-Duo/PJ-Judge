@@ -1,9 +1,9 @@
 using PackageCompiler
 
-pluto = open("pluto.jl", "r")
+main = open("main.jl", "r")
 output = open("_temp.jl", "w")
 
-for (i, line) in enumerate(eachline(pluto))
+for (i, line) in enumerate(eachline(main))
     if i == 1
         write(output, "module PJ_Judge")
     end
@@ -17,7 +17,7 @@ for (i, line) in enumerate(eachline(pluto))
     end
 end
 
-close(pluto)
+close(main)
 close(output)
 
 create_app("..", "build", force=true)
