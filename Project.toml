@@ -1,6 +1,6 @@
 name = "PJ_Judge"
 uuid = "66b871bf-0bf2-418d-b235-1823d60d7b04"
-authors = ["p0ryae", "Shahi-Paneer"]
+authors = ["PJ-Duo"]
 version = "0.1.0"
 
 [deps]
