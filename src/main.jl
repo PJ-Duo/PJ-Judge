@@ -139,9 +139,8 @@ function rm_oov_punc(doc)
 	return nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
 end
 
-
 # ╔═╡ bb3b9f77-0f95-45c0-bb3c-affd439d81c9
-# lemmatize nlp sentence
+# lemmatize word(s)
 function lemmatize(doc) 
 	num_tokens = length(doc)
 	new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
@@ -154,7 +153,6 @@ function lemmatize(doc)
             idx += 1
         end
 	end
-
 	return nlp(String(new_text[1:idx-1]))
 end
 
@@ -164,31 +162,30 @@ if lowercase(startup) == "chat"
 		print(Crayon(foreground = :green), Crayon(bold = true), "query> ", Crayon(reset = true))
 		chatInput = readline()
 
-		if lowercase(chatInput) == "exit"
-			break
+		if isempty(strip(chatInput))
+			@info "=> Empty input string"
+			continue
 		end
 
 		y = lemmatize(rm_oov_punc(nlp(lowercase(chatInput))))
 		
 		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in y.ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
-
+	
 		filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
-
-		sim_arr = []
-		for (i, row) in enumerate(eachrow(filtered_ds))
+	
+		sim_arr = Vector{Float64}()
+		for row in eachrow(filtered_ds)
 			x = lemmatize(rm_oov_punc(nlp(lowercase(row[1]))))
-			
+				
 			push!(sim_arr, dot(x.vector, y.vector) / (norm(x.vector) * norm(y.vector)))
-			if nrow(filtered_ds) == i
-				if maximum(sim_arr) >= 0.65
+			if length(sim_arr) == nrow(filtered_ds)
+				if maximum(sim_arr) >= 0.7
 					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2])
-					empty!(sim_arr)
-					break;
 				else
 					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), "Sorry, I'm not trained enough to answer that question.")
-					empty!(sim_arr)
-					break;
 				end
+				empty!(sim_arr)
+				break
 			end
 		end
 	end
@@ -223,7 +220,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "a690e807ae74196b5c0b13a6f673bbc251dfc182"
+project_hash = "29fe11dee255eaea07b07f3c7712ea6d01d6d989"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
