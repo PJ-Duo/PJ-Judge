@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
-using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random
+using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec
 
 # ╔═╡ 0941c3fc-bac8-11ed-11d5-6318de0d8aec
 module Spacy
@@ -70,6 +70,9 @@ dataset = CSV.read("../data/dataset.csv", DataFrame)
 # ╔═╡ e55d111b-333f-4715-89eb-5336f06c21e7
 nlp = Spacy.load("en_core_web_md")
 
+# ╔═╡ dafe5b70-0192-401a-8cb7-cf9f47615b8a
+vec_model = wordvectors("../data/vec-pretrained")
+
 # ╔═╡ a81bbd73-5dbf-4711-bd5a-bcb716560cfd
 patterns = [
 	Dict("label" => "CAPI", "pattern" => [Dict("lower" => "capital")]),
@@ -117,28 +120,6 @@ print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = tru
 # ╔═╡ 2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 startup = readline()
 
-# ╔═╡ 93646e28-4480-4b5a-b149-53e295fc672e
-# rm out-of-vocab word(s) & punctuation(s)
-function rm_oov_punc(doc)
-	ignore_list = []
-	num_tokens = length(doc)
-    new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
-    idx = 1
-    for (i, token) in enumerate(doc)
-        if token.is_oov
-            continue
-        end
-        new_text[idx:idx+length(token.text)-1] .= codeunits(token.text)
-        idx += length(token.text)
-        if i < num_tokens
-            new_text[idx] = ' '
-            idx += 1
-        end
-    end
-	
-	return nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
-end
-
 # ╔═╡ bb3b9f77-0f95-45c0-bb3c-affd439d81c9
 # lemmatize word(s)
 function lemmatize(doc) 
@@ -153,7 +134,42 @@ function lemmatize(doc)
             idx += 1
         end
 	end
-	return nlp(String(new_text[1:idx-1]))
+	return String(new_text[1:idx-1])
+end
+
+# ╔═╡ 2844cd7a-83d7-4d0a-bb64-aaec00876e15
+# checks if a word is a stopword => Returns a bool
+function is_stopword(word)::Bool
+    stopwords = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
+    return word in stopwords
+end
+
+# ╔═╡ 93646e28-4480-4b5a-b149-53e295fc672e
+# rm out-of-vocab word(s) & punctuation(s)
+function rm_oov_punc(doc)
+	ignore_list = []
+	num_tokens = length(doc)
+    new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
+    idx = 1
+    for (i, token) in enumerate(doc)
+        if token.is_oov || is_stopword(token.text)
+            continue
+        end
+        new_text[idx:idx+length(token.text)-1] .= codeunits(token.text)
+        idx += length(token.text)
+        if i < num_tokens
+            new_text[idx] = ' '
+            idx += 1
+        end
+    end
+	
+	return nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
+end
+
+# ╔═╡ 1d262c7d-cf8f-4337-a5c2-fd721864c4de
+# vectorizes a string of text
+function vectorize(x)
+	return mean([in_vocabulary(vec_model, word) ? get_vector(vec_model, word) : zeros(Float64, 100) for word in split(x)])
 end
 
 # ╔═╡ bf60a9d5-4047-485e-9f91-a385703cd518
@@ -169,7 +185,7 @@ if lowercase(startup) == "chat"
 
 		y = lemmatize(rm_oov_punc(nlp(lowercase(chatInput))))
 		
-		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in y.ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
+		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in nlp(y).ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
 	
 		filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
 	
@@ -177,7 +193,7 @@ if lowercase(startup) == "chat"
 		for row in eachrow(filtered_ds)
 			x = lemmatize(rm_oov_punc(nlp(lowercase(row[1]))))
 				
-			push!(sim_arr, dot(x.vector, y.vector) / (norm(x.vector) * norm(y.vector)))
+			push!(sim_arr, dot(vectorize(x), vectorize(y)) / (norm(vectorize(x)) * norm(vectorize(y))))
 			if length(sim_arr) == nrow(filtered_ds)
 				if maximum(sim_arr) >= 0.7
 					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2])
@@ -204,6 +220,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Word2Vec = "c64b6f0f-98cd-51d1-af78-58ae84944834"
 
 [compat]
 BenchmarkTools = "~1.3.2"
@@ -212,6 +229,7 @@ Conda = "~1.8.0"
 Crayons = "~4.1.1"
 DataFrames = "~1.5.0"
 PyCall = "~1.95.1"
+Word2Vec = "~0.5.3"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -220,7 +238,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "29fe11dee255eaea07b07f3c7712ea6d01d6d989"
+project_hash = "dbfa90d54a18330a3c4b799842252ce96ffb50dc"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -342,6 +360,12 @@ git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
 
+[[deps.JLLWrappers]]
+deps = ["Preferences"]
+git-tree-sha1 = "abc9885a7ca2052a736a600f7fa66209f96506e1"
+uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
+version = "1.4.1"
+
 [[deps.JSON]]
 deps = ["Dates", "Mmap", "Parsers", "Unicode"]
 git-tree-sha1 = "3c837543ddb02250ef42f4738347454f95079d4e"
@@ -362,6 +386,10 @@ version = "0.6.3"
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
 version = "7.84.0+0"
+
+[[deps.LibGit2]]
+deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
+uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
@@ -425,6 +453,11 @@ deps = ["Dates", "SnoopPrecompile"]
 git-tree-sha1 = "478ac6c952fddd4399e71d4779797c538d0ff2bf"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.5.8"
+
+[[deps.Pkg]]
+deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
+uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
@@ -529,6 +562,11 @@ git-tree-sha1 = "c79322d36826aa2f4fd8ecfa96ddb47b174ac78d"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 version = "1.10.0"
 
+[[deps.Tar]]
+deps = ["ArgTools", "SHA"]
+uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.1"
+
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -557,6 +595,18 @@ git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
 uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 version = "1.4.2"
 
+[[deps.Word2Vec]]
+deps = ["LinearAlgebra", "Statistics", "Word2Vec_jll"]
+git-tree-sha1 = "a4e76aeaaf2bda1556864b610051960cea642958"
+uuid = "c64b6f0f-98cd-51d1-af78-58ae84944834"
+version = "0.5.3"
+
+[[deps.Word2Vec_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "264768df753f8328295d7b7cff55edc52f180284"
+uuid = "9fbe4022-c126-5389-b4b2-756cc9f654d0"
+version = "0.1.0+0"
+
 [[deps.WorkerUtilities]]
 git-tree-sha1 = "cd1659ba0d57b71a464a29e64dbc67cfe83d54e7"
 uuid = "76eceee3-57b5-4d4a-8e66-0e911cebbf60"
@@ -576,6 +626,11 @@ version = "5.1.1+0"
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
 version = "1.48.0+0"
+
+[[deps.p7zip_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "17.4.0+0"
 """
 
 # ╔═╡ Cell order:
@@ -583,6 +638,7 @@ version = "1.48.0+0"
 # ╠═0941c3fc-bac8-11ed-11d5-6318de0d8aec
 # ╠═76e1dfb9-b953-422c-a06a-9d87027f9c3b
 # ╠═e55d111b-333f-4715-89eb-5336f06c21e7
+# ╠═dafe5b70-0192-401a-8cb7-cf9f47615b8a
 # ╠═a81bbd73-5dbf-4711-bd5a-bcb716560cfd
 # ╠═1059e83e-ddd9-47f2-a967-eaa794e9fe13
 # ╠═e43bf442-39dc-44fc-b631-85402db7ddec
@@ -593,5 +649,7 @@ version = "1.48.0+0"
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
 # ╠═93646e28-4480-4b5a-b149-53e295fc672e
 # ╠═bb3b9f77-0f95-45c0-bb3c-affd439d81c9
+# ╠═2844cd7a-83d7-4d0a-bb64-aaec00876e15
+# ╠═1d262c7d-cf8f-4337-a5c2-fd721864c4de
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

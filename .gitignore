@@ -27,3 +27,4 @@ Manifest.toml
 .env
 build
 _temp.jl
+vec-pretrained
