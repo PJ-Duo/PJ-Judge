@@ -64,14 +64,69 @@ function EntityRuler(x)
 end
 end # End of Spacy Module
 
-# ╔═╡ 76e1dfb9-b953-422c-a06a-9d87027f9c3b
-dataset = CSV.read("../data/dataset.csv", DataFrame)
+# ╔═╡ fb843426-f11e-4484-b4e1-3121a230c2fd
+# lemmatize word(s)
+function lemmatize(doc)
+	if !isempty(doc)
+		num_tokens = length(doc)
+		new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
+		idx = 1
+		for (i, token) in enumerate(doc)
+			new_text[idx:idx+length(token.lemma_)-1] .= codeunits(token.lemma_)
+			idx += length(token.lemma_)
+			if i < num_tokens
+            	new_text[idx] = ' '
+            	idx += 1
+        	end
+		end
+		return String(new_text[1:idx-1])
+	end
+end
 
-# ╔═╡ e55d111b-333f-4715-89eb-5336f06c21e7
+# ╔═╡ 589917d6-aa38-4fda-96b1-4a0915895ffd
+# checks if a word is a stopword => Returns a bool
+function is_stopword(x)::Bool
+    stopwords = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
+    return x in stopwords
+end
+
+# ╔═╡ 91462e0d-101c-4a46-8232-1a77897f9baf
 nlp = Spacy.load("en_core_web_md")
 
+# ╔═╡ d6f94c81-37b6-400e-b9f3-78d6bb760f44
+# rm out-of-vocab word(s) & punctuation(s)
+function rm_oov_punc(doc)
+	ignore_list = []
+	num_tokens = length(doc)
+    new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
+    idx = 1
+    for (i, token) in enumerate(doc)
+        if token.is_oov || is_stopword(token.text)
+            continue
+        end
+        new_text[idx:idx+length(token.text)-1] .= codeunits(token.text)
+        idx += length(token.text)
+        if i < num_tokens
+            new_text[idx] = ' '
+            idx += 1
+        end
+    end
+	
+	return nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
+end
+
+# ╔═╡ 8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
+dataset = deleteat!(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)), [i for (i, row) in enumerate(eachrow(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)))) if isnothing(lemmatize(rm_oov_punc(nlp(lowercase(row[1])))))])
+
 # ╔═╡ dafe5b70-0192-401a-8cb7-cf9f47615b8a
+# define & load word vectors
 vec_model = wordvectors("../data/vec-pretrained")
+
+# ╔═╡ 372dbfac-2aa8-4016-912c-5439e5969c08
+# vectorizes a string of text
+function vectorize(x)
+	return mean([in_vocabulary(vec_model, word) ? get_vector(vec_model, word) : zeros(Float64, 100) for word in split(x)])
+end
 
 # ╔═╡ a81bbd73-5dbf-4711-bd5a-bcb716560cfd
 patterns = [
@@ -101,76 +156,11 @@ catch
 	nlp.add_pipe("entity_ruler", name="pattern++", config=ent_config).add_patterns(patterns)
 end
 
-# ╔═╡ 16e48e9f-7d8e-4693-88b7-8add936fbf62
-vocab_data = Dict(
-    "liemcomputing" => rand(-1:1, 300),
-    "porya" => rand(-1:1, 300),
-    "jaiden" => rand(-1:1, 300)
-)
-
-# ╔═╡ da6eb0db-0970-4fd1-92bc-d7e9980e7354
-# Attach custom word(s) to the vocab
-for (word, vector) in vocab_data
-    nlp.vocab.set_vector(word, vector)
-end
-
 # ╔═╡ 9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = true))
 
 # ╔═╡ 2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 startup = readline()
-
-# ╔═╡ bb3b9f77-0f95-45c0-bb3c-affd439d81c9
-# lemmatize word(s)
-function lemmatize(doc) 
-	num_tokens = length(doc)
-	new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
-	idx = 1
-	for (i, token) in enumerate(doc)
-		new_text[idx:idx+length(token.lemma_)-1] .= codeunits(token.lemma_)
-		idx += length(token.lemma_)
-		if i < num_tokens
-            new_text[idx] = ' '
-            idx += 1
-        end
-	end
-	return String(new_text[1:idx-1])
-end
-
-# ╔═╡ 2844cd7a-83d7-4d0a-bb64-aaec00876e15
-# checks if a word is a stopword => Returns a bool
-function is_stopword(word)::Bool
-    stopwords = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
-    return word in stopwords
-end
-
-# ╔═╡ 93646e28-4480-4b5a-b149-53e295fc672e
-# rm out-of-vocab word(s) & punctuation(s)
-function rm_oov_punc(doc)
-	ignore_list = []
-	num_tokens = length(doc)
-    new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
-    idx = 1
-    for (i, token) in enumerate(doc)
-        if token.is_oov || is_stopword(token.text)
-            continue
-        end
-        new_text[idx:idx+length(token.text)-1] .= codeunits(token.text)
-        idx += length(token.text)
-        if i < num_tokens
-            new_text[idx] = ' '
-            idx += 1
-        end
-    end
-	
-	return nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
-end
-
-# ╔═╡ 1d262c7d-cf8f-4337-a5c2-fd721864c4de
-# vectorizes a string of text
-function vectorize(x)
-	return mean([in_vocabulary(vec_model, word) ? get_vector(vec_model, word) : zeros(Float64, 100) for word in split(x)])
-end
 
 # ╔═╡ bf60a9d5-4047-485e-9f91-a385703cd518
 if lowercase(startup) == "chat"
@@ -188,7 +178,7 @@ if lowercase(startup) == "chat"
 		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in nlp(y).ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
 	
 		filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
-	
+
 		sim_arr = Vector{Float64}()
 		for row in eachrow(filtered_ds)
 			x = lemmatize(rm_oov_punc(nlp(lowercase(row[1]))))
@@ -238,7 +228,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "dbfa90d54a18330a3c4b799842252ce96ffb50dc"
+project_hash = "ebd559f8635ad0f5bdb27643313b5ce066957057"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -636,20 +626,18 @@ version = "17.4.0+0"
 # ╔═╡ Cell order:
 # ╠═13f35ab2-2f4f-4f93-95f4-f5043631da83
 # ╠═0941c3fc-bac8-11ed-11d5-6318de0d8aec
-# ╠═76e1dfb9-b953-422c-a06a-9d87027f9c3b
-# ╠═e55d111b-333f-4715-89eb-5336f06c21e7
+# ╠═d6f94c81-37b6-400e-b9f3-78d6bb760f44
+# ╠═fb843426-f11e-4484-b4e1-3121a230c2fd
+# ╠═589917d6-aa38-4fda-96b1-4a0915895ffd
+# ╠═372dbfac-2aa8-4016-912c-5439e5969c08
+# ╠═91462e0d-101c-4a46-8232-1a77897f9baf
+# ╠═8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
 # ╠═dafe5b70-0192-401a-8cb7-cf9f47615b8a
 # ╠═a81bbd73-5dbf-4711-bd5a-bcb716560cfd
 # ╠═1059e83e-ddd9-47f2-a967-eaa794e9fe13
 # ╠═e43bf442-39dc-44fc-b631-85402db7ddec
-# ╠═16e48e9f-7d8e-4693-88b7-8add936fbf62
-# ╠═da6eb0db-0970-4fd1-92bc-d7e9980e7354
 # ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
-# ╠═93646e28-4480-4b5a-b149-53e295fc672e
-# ╠═bb3b9f77-0f95-45c0-bb3c-affd439d81c9
-# ╠═2844cd7a-83d7-4d0a-bb64-aaec00876e15
-# ╠═1d262c7d-cf8f-4337-a5c2-fd721864c4de
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
