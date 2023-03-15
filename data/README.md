@@ -23,5 +23,5 @@ The `grammer` and `ner` folder are both provided by PJ_Judge.
 
 The grammer folder contains two files: `pos-grammer` & `irregular_nouns.csv`. `pos-grammer` being a corpus of Part-of-Speech grammers and is a list of lemmas and variations extracted from the British National Corpus (BNC). `irregular_nouns.csv` is a list of irregular nouns and their singular form used for handling the case of plural nouns.
 
-The ner folder contains a ner file and the file is used for named entity recognition, which helps majorly when it comes to decision making of PJ_Judge. Pay close attention to the format, but to sum it up, the first word in each line represents the tag name, and the rest following with a space are the entities of the tag. 
+The `ner` folder contains a `ner` file and the file is used for named entity recognition, which helps majorly when it comes to decision making of PJ_Judge. Pay close attention to the format, but to sum it up, the first word in each line represents the tag name, and the rest following with a space are the entities of the tag. 
 
