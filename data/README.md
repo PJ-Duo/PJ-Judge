@@ -1,4 +1,4 @@
-## Data(s) Used by PJ_Judge
+## Data(s) used by PJ_Judge
 
 For copyright, privacy concerns and the enormous size, we've decided to avoid disclosing corpus, datasets, and pretrained vecs. 
 
@@ -14,4 +14,14 @@ Furthermore, the `dataset.csv` file contains questions with answers to them. The
 Lastly, ensure you have word vectors. For getting word vectors you need to have a large corpus with alot of words (like the wiki method mentioned at the beginning), and then use [Word2Vec.jl](https://github.com/JuliaText/Word2Vec.jl) to convert the large corpus into vectors. Remember, the more words converted to vectors, the more accurate when it comes to processing. After you're done with converting, place the file inside the `vecs` folder under the name `vec-pretrained`.
 
 
-Please note that the files inside of the `vecs` and `crps` are just placeholders and are required to be replaced.
+Please note that the files inside of the `vecs` and `crps` are just placeholders and are meant to be replaced.
+
+
+## Data(s) provided with PJ_Judge
+
+The `grammer` and `ner` folder are both provided by PJ_Judge. 
+
+The grammer folder contains two files: `pos-grammer` & `irregular_nouns.csv`. `pos-grammer` being a corpus of Part-of-Speech grammers and is a list of lemmas and variations extracted from the British National Corpus (BNC). `irregular_nouns.csv` is a list of irregular nouns and their singular form used for handling the case of plural nouns.
+
+The ner folder contains a ner file and the file is used for named entity recognition, which helps majorly when it comes to decision making of PJ_Judge. Pay close attention to the format, but to sum it up, the first word in each line represents the tag name, and the rest following with a space are the entities of the tag. 
+
