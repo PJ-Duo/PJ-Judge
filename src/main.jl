@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
-using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec
+using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis, WordNet
 
 # ╔═╡ 0941c3fc-bac8-11ed-11d5-6318de0d8aec
 module Spacy
@@ -64,16 +64,73 @@ function EntityRuler(x)
 end
 end # End of Spacy Module
 
+# ╔═╡ cb9d1be7-1f36-4d26-a084-1f5c64354757
+function nerify(file)
+	dict = Dict{String, Vector{String}}()
+    lines = readlines(file)
+    n = length(lines)
+    values = Vector{Vector{String}}(undef, n)
+    keys = Vector{String}(undef, n)
+    @inbounds for i in 1:n
+        line = split(lines[i])
+        keys[i] = line[1]
+        values[i] = line[2:end]
+    end
+    for i in 1:n
+        dict[keys[i]] = [lowercase(ent) for ent in values[i]]
+    end
+	return dict
+end
+
+# ╔═╡ 9b511634-3d10-4f65-8c22-fdefd45b7116
+function ner_tag(dict::Dict{String, Vector{String}}, search_term::String)
+    for (tag, values) in dict
+        if any(x -> search_term in split(x), values)
+            return tag
+        end
+    end
+    return ""
+end
+
+# ╔═╡ b65c317d-291e-4d79-91ed-61cc50c9161c
+function reg_vocab_crps(crps_path)
+	word_freq = Dict{String, Int}()
+	for line in eachline(crps_path)
+		for word in split(line)
+	    	word_freq[word] = get(word_freq, word, 0) + 1
+		end
+	end
+    return Vocabulary(collect(filter(w -> word_freq[w] > 1, keys(word_freq)))) 
+end
+
+# ╔═╡ 83909f15-6987-496b-b614-9094cebd3a70
+const STOPWORDS = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
+
+# ╔═╡ 589917d6-aa38-4fda-96b1-4a0915895ffd
+# checks if a word is a stopword => Returns a bool
+function is_stopword(x)::Bool
+    return x in STOPWORDS
+end
+
+# ╔═╡ 91462e0d-101c-4a46-8232-1a77897f9baf
+# ╠═╡ skip_as_script = true
+#=╠═╡
+# define spacy nlp
+nlp = Spacy.load("en_core_web_md")
+  ╠═╡ =#
+
 # ╔═╡ fb843426-f11e-4484-b4e1-3121a230c2fd
+# ╠═╡ skip_as_script = true
+#=╠═╡
 # lemmatize word(s)
-function lemmatize(doc)
-	if !isempty(doc)
-		num_tokens = length(doc)
-		new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
+function lemmatize(x)
+	if !isempty(x)
+		num_tokens = length(x)
+		new_text = Vector{UInt8}(undef, length(x) + num_tokens - 1)
 		idx = 1
-		for (i, token) in enumerate(doc)
-			new_text[idx:idx+length(token.lemma_)-1] .= codeunits(token.lemma_)
-			idx += length(token.lemma_)
+		for (i, token) in enumerate(tokenize(x))
+			new_text[idx:idx+length(nlp(token)[1].lemma_)-1] .= codeunits(nlp(token)[1].lemma_)
+			idx += length(nlp(token)[1].lemma_)
 			if i < num_tokens
             	new_text[idx] = ' '
             	idx += 1
@@ -82,45 +139,43 @@ function lemmatize(doc)
 		return String(new_text[1:idx-1])
 	end
 end
+  ╠═╡ =#
 
-# ╔═╡ 589917d6-aa38-4fda-96b1-4a0915895ffd
-# checks if a word is a stopword => Returns a bool
-function is_stopword(x)::Bool
-    stopwords = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
-    return x in stopwords
+# ╔═╡ 86fca170-8f65-468c-99e6-391185e47274
+# define native vocab impl.
+vocabn = reg_vocab_crps("../data/crps/corpus")
+
+# ╔═╡ ee84f78e-c83f-4102-8cf7-64c2cd390ffc
+# checks if a word is out-of-vocab => Returns a bool
+function is_oov(x)::Bool
+	return !(x in keys(vocabn.vocab))
 end
 
-# ╔═╡ 91462e0d-101c-4a46-8232-1a77897f9baf
-nlp = Spacy.load("en_core_web_md")
-
 # ╔═╡ d6f94c81-37b6-400e-b9f3-78d6bb760f44
-# rm out-of-vocab word(s) & punctuation(s)
-function rm_oov_punc(doc)
+# rm out-of-vocab word(s) & chars
+function rm_oov_punc(x)
 	ignore_list = []
-	num_tokens = length(doc)
-    new_text = Vector{UInt8}(undef, length(doc.text) + num_tokens - 1)
+	num_tokens = length(x)
+    new_text = Vector{UInt8}(undef, length(x) + num_tokens - 1)
     idx = 1
-    for (i, token) in enumerate(doc)
-        if token.is_oov || is_stopword(token.text)
+    for (i, token) in enumerate(tokenize(x))
+        if is_oov(token) || is_stopword(token)
             continue
         end
-        new_text[idx:idx+length(token.text)-1] .= codeunits(token.text)
-        idx += length(token.text)
+        new_text[idx:idx+length(token)-1] .= codeunits(token)
+        idx += length(token)
         if i < num_tokens
             new_text[idx] = ' '
             idx += 1
         end
     end
 	
-	return nlp(replace(replace(String(new_text[1:idx-1]), r"[[:punct:]]" => ""), r"\s+" => " "))
+	return String(new_text[1:idx-1])
 end
-
-# ╔═╡ 8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
-dataset = deleteat!(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)), [i for (i, row) in enumerate(eachrow(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)))) if isnothing(lemmatize(rm_oov_punc(nlp(lowercase(row[1])))))])
 
 # ╔═╡ dafe5b70-0192-401a-8cb7-cf9f47615b8a
 # define & load word vectors
-vec_model = wordvectors("../data/vec-pretrained")
+vec_model = wordvectors("../data/vecs/vec-pretrained")
 
 # ╔═╡ 372dbfac-2aa8-4016-912c-5439e5969c08
 # vectorizes a string of text
@@ -128,33 +183,11 @@ function vectorize(x)
 	return mean([in_vocabulary(vec_model, word) ? get_vector(vec_model, word) : zeros(Float64, 100) for word in split(x)])
 end
 
-# ╔═╡ a81bbd73-5dbf-4711-bd5a-bcb716560cfd
-patterns = [
-	Dict("label" => "CAPI", "pattern" => [Dict("lower" => "capital")]),
-	Dict("label" => "ORG", "pattern" => [Dict("lower" => "github")]),
-	Dict("label" => "PROGLANG", "pattern" => [Dict("lower" => "c++")]),
-	Dict("label" => "PROGLANG", "pattern" => [Dict("lower" => "python")]),
-	Dict("label" => "PROGLANG", "pattern" => [Dict("lower" => "javascript")]),
-	Dict("label" => "WEBSITE", "pattern" => [Dict("lower" => "liemcomputing")]),
-	Dict("label" => "WEBSITE", "pattern" => [Dict("lower" => "youtube")]),
-	Dict("label" => "WEBSITE", "pattern" => [Dict("lower" => "twitter")]),
-	Dict("label" => "MARKUPLANG", "pattern" => [Dict("lower" => "html")]),
-	Dict("label" => "STYLELANG", "pattern" => [Dict("lower" => "css")])
-]
+# ╔═╡ 3b763a58-1c38-416b-9287-ab22b674472c
+ner_model = nerify("../data/ner/ner")
 
-# ╔═╡ 1059e83e-ddd9-47f2-a967-eaa794e9fe13
-ent_config = Dict(
-	"overwrite_ents" => "true",
-	"validate" => "true"
-)
-
-# ╔═╡ e43bf442-39dc-44fc-b631-85402db7ddec
-try
-	nlp.add_pipe("entity_ruler", name="pattern++", config=ent_config).add_patterns(patterns)
-catch
-	nlp.remove_pipe("pattern++")
-	nlp.add_pipe("entity_ruler", name="pattern++", config=ent_config).add_patterns(patterns)
-end
+# ╔═╡ 8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
+dataset = deleteat!(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)), [i for (i, row) in enumerate(eachrow(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)))) if isnothing(rm_oov_punc(lowercase(row[1])))])
 
 # ╔═╡ 9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = true))
@@ -173,15 +206,16 @@ if lowercase(startup) == "chat"
 			continue
 		end
 
-		y = lemmatize(rm_oov_punc(nlp(lowercase(chatInput))))
+		y = rm_oov_punc(lowercase(chatInput))
+		y_ner_tags = Set(ner_tag(ner_model, ent) for ent in tokenize(y))
 		
-		filtered_ds = filter(row -> any(x -> in(x, [ent.label_ for ent in nlp(y).ents]), [ent.label_ for ent in nlp(row.query).ents]), dataset)
-	
+		filtered_ds = filter(row -> any(x -> in(x, y_ner_tags), [ner_tag(ner_model, ent) for ent in tokenize(lowercase(row.query))]), dataset)
+
 		filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
 
 		sim_arr = Vector{Float64}()
 		for row in eachrow(filtered_ds)
-			x = lemmatize(rm_oov_punc(nlp(lowercase(row[1]))))
+			x = rm_oov_punc(lowercase(row[1]))
 				
 			push!(sim_arr, dot(vectorize(x), vectorize(y)) / (norm(vectorize(x)) * norm(vectorize(y))))
 			if length(sim_arr) == nrow(filtered_ds)
@@ -210,7 +244,9 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+TextAnalysis = "a2db99b7-8b79-58f8-94bf-bbc811eef33d"
 Word2Vec = "c64b6f0f-98cd-51d1-af78-58ae84944834"
+WordNet = "a945a9ba-879e-550e-aa45-2a4d52798e91"
 
 [compat]
 BenchmarkTools = "~1.3.2"
@@ -219,7 +255,9 @@ Conda = "~1.8.0"
 Crayons = "~4.1.1"
 DataFrames = "~1.5.0"
 PyCall = "~1.95.1"
+TextAnalysis = "~0.7.3"
 Word2Vec = "~0.5.3"
+WordNet = "~0.2.2"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -228,7 +266,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "ebd559f8635ad0f5bdb27643313b5ce066957057"
+project_hash = "bd74d91090021d1cdeacccec73b09d578d36891d"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -246,11 +284,28 @@ git-tree-sha1 = "d9a9701b899b30332bbcb3e1679c41cce81fb0e8"
 uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 version = "1.3.2"
 
+[[deps.BitFlags]]
+git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
+uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
+version = "0.1.7"
+
 [[deps.CSV]]
 deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "SnoopPrecompile", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
 git-tree-sha1 = "c700cce799b51c9045473de751e9319bdd1c6e94"
 uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 version = "0.10.9"
+
+[[deps.ChainRulesCore]]
+deps = ["Compat", "LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "c6d890a52d2c4d55d326439580c3b8d0875a77d9"
+uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+version = "1.15.7"
+
+[[deps.ChangesOfVariables]]
+deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
+git-tree-sha1 = "485193efd2176b88e6622a39a246f8c5b600e74e"
+uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
+version = "0.1.6"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -260,9 +315,9 @@ version = "0.7.1"
 
 [[deps.Compat]]
 deps = ["Dates", "LinearAlgebra", "UUIDs"]
-git-tree-sha1 = "61fdd77467a5c3ad071ef8277ac6bd6af7dd4c04"
+git-tree-sha1 = "7a60c856b9fa189eb34f5f8a6f6b5529b7942957"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.6.0"
+version = "4.6.1"
 
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -285,6 +340,12 @@ git-tree-sha1 = "e8119c1a33d267e16108be441a287a6981ba1630"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.14.0"
 
+[[deps.DataDeps]]
+deps = ["HTTP", "Libdl", "Reexport", "SHA", "p7zip_jll"]
+git-tree-sha1 = "bc0a264d3e7b3eeb0b6fc9f6481f970697f29805"
+uuid = "124859b0-ceae-595e-8997-d05f6a7a8dfe"
+version = "0.7.10"
+
 [[deps.DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SnoopPrecompile", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
 git-tree-sha1 = "aa51303df86f8626a962fccb878430cdb0a97eee"
@@ -305,6 +366,20 @@ version = "1.0.0"
 [[deps.Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+
+[[deps.DelimitedFiles]]
+deps = ["Mmap"]
+uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+
+[[deps.Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
+uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+
+[[deps.DocStringExtensions]]
+deps = ["LibGit2"]
+git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
+uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+version = "0.9.3"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -330,6 +405,23 @@ version = "0.4.2"
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
+[[deps.HTML_Entities]]
+deps = ["StrTables"]
+git-tree-sha1 = "c4144ed3bc5f67f595622ad03c0e39fa6c70ccc7"
+uuid = "7693890a-d069-55fe-a829-b4a6d304f0ee"
+version = "1.0.1"
+
+[[deps.HTTP]]
+deps = ["Base64", "CodecZlib", "Dates", "IniFile", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
+git-tree-sha1 = "37e4657cd56b11abe3d10cd4a1ec5fbdb4180263"
+uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+version = "1.7.4"
+
+[[deps.IniFile]]
+git-tree-sha1 = "f550e6e32074c939295eb5ea6de31849ac2c9625"
+uuid = "83e8ac13-25f8-5344-8a64-a9f2b223428f"
+version = "0.5.1"
+
 [[deps.InlineStrings]]
 deps = ["Parsers"]
 git-tree-sha1 = "9cc2baf75c6d09f9da536ddf58eb2f29dedaf461"
@@ -340,10 +432,21 @@ version = "1.4.0"
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
+[[deps.InverseFunctions]]
+deps = ["Test"]
+git-tree-sha1 = "49510dfcb407e572524ba94aeae2fced1f3feb0f"
+uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
+version = "0.1.8"
+
 [[deps.InvertedIndices]]
 git-tree-sha1 = "82aec7a3dd64f4d9584659dc0b62ef7db2ef3e19"
 uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
 version = "1.2.0"
+
+[[deps.IrrationalConstants]]
+git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
+uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
+version = "0.2.2"
 
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -366,6 +469,12 @@ version = "0.21.3"
 git-tree-sha1 = "f2355693d6778a178ade15952b7ac47a4ff97996"
 uuid = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 version = "1.3.0"
+
+[[deps.Languages]]
+deps = ["InteractiveUtils", "JSON"]
+git-tree-sha1 = "b1a564061268ccc3f3397ac0982983a657d4dcb8"
+uuid = "8ef0a80b-9436-5d2c-a485-80b904378c43"
+version = "0.4.3"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -393,8 +502,20 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
+[[deps.LogExpFunctions]]
+deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
+git-tree-sha1 = "0a1b7c2863e44523180fdb3146534e265a91870b"
+uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+version = "0.3.23"
+
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[deps.LoggingExtras]]
+deps = ["Dates", "Logging"]
+git-tree-sha1 = "cedb76b37bc5a6c702ade66be44f831fa23c681e"
+uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+version = "1.0.0"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
@@ -405,6 +526,12 @@ version = "0.5.10"
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+
+[[deps.MbedTLS]]
+deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "Random", "Sockets"]
+git-tree-sha1 = "03a9b9718f5682ecb107ac9f7308991db4ce395b"
+uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
+version = "1.1.7"
 
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -432,6 +559,18 @@ version = "1.2.0"
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 version = "0.3.20+0"
+
+[[deps.OpenSSL]]
+deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
+git-tree-sha1 = "6503b77492fd7fcb9379bf73cd31035670e3c509"
+uuid = "4d8831e6-92b7-49fb-bdf8-b643e874388c"
+version = "1.3.3"
+
+[[deps.OpenSSL_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "9ff31d101d987eb9d66bd8b176ac7c277beccd09"
+uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
+version = "1.1.20+0"
 
 [[deps.OrderedCollections]]
 git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
@@ -475,6 +614,12 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 deps = ["Printf"]
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
+[[deps.ProgressMeter]]
+deps = ["Distributed", "Printf"]
+git-tree-sha1 = "d7a7aef8f8f2d537104f170139553b14dfe39fe9"
+uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
+version = "1.7.2"
+
 [[deps.PyCall]]
 deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
 git-tree-sha1 = "62f417f6ad727987c755549e9cd88c46578da562"
@@ -507,11 +652,28 @@ version = "1.3.18"
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
+[[deps.SimpleBufferStream]]
+git-tree-sha1 = "874e8867b33a00e784c8a7e4b60afe9e037b74e1"
+uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
+version = "1.1.0"
+
 [[deps.SnoopPrecompile]]
 deps = ["Preferences"]
 git-tree-sha1 = "e760a70afdcd461cf01a575947738d359234665c"
 uuid = "66db9d55-30c0-4569-8b51-7e840670fc0c"
 version = "1.0.3"
+
+[[deps.Snowball]]
+deps = ["Languages", "Snowball_jll", "WordTokenizers"]
+git-tree-sha1 = "d38c1ff8a2fca7b1c65a51457dabebef28052399"
+uuid = "fb8f903a-0164-4e73-9ffe-431110250c3b"
+version = "0.1.0"
+
+[[deps.Snowball_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "6ff3a185a583dca7265cbfcaae1da16aa3b6a962"
+uuid = "88f46535-a3c0-54f4-998e-4320a1339f51"
+version = "2.2.0+0"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -529,6 +691,24 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[deps.StatsAPI]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "f9af7f195fb13589dd2e2d57fdb401717d2eb1f6"
+uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
+version = "1.5.0"
+
+[[deps.StatsBase]]
+deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
+uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+version = "0.33.21"
+
+[[deps.StrTables]]
+deps = ["Dates"]
+git-tree-sha1 = "5998faae8c6308acc25c25896562a1e66a3bb038"
+uuid = "9700d1a9-a7c8-5760-9816-a99fda30bb8f"
+version = "1.0.1"
 
 [[deps.StringManipulation]]
 git-tree-sha1 = "46da2434b41f41ac3594ee9816ce5541c6096123"
@@ -561,11 +741,22 @@ version = "1.10.1"
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
+[[deps.TextAnalysis]]
+deps = ["DataStructures", "DelimitedFiles", "JSON", "Languages", "LinearAlgebra", "Printf", "ProgressMeter", "Random", "Serialization", "Snowball", "SparseArrays", "Statistics", "StatsBase", "Tables", "WordTokenizers"]
+git-tree-sha1 = "bc85e54209c30e69e1925460ec0257a916683f59"
+uuid = "a2db99b7-8b79-58f8-94bf-bbc811eef33d"
+version = "0.7.3"
+
 [[deps.TranscodingStreams]]
 deps = ["Random", "Test"]
 git-tree-sha1 = "94f38103c984f89cf77c402f2a68dbd870f8165f"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.11"
+
+[[deps.URIs]]
+git-tree-sha1 = "074f993b0ca030848b897beff716d93aca60f06a"
+uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+version = "1.4.2"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -597,6 +788,18 @@ git-tree-sha1 = "264768df753f8328295d7b7cff55edc52f180284"
 uuid = "9fbe4022-c126-5389-b4b2-756cc9f654d0"
 version = "0.1.0+0"
 
+[[deps.WordNet]]
+deps = ["DataDeps", "Test"]
+git-tree-sha1 = "a7a63f03bb14928edb05042ea555704890f8465e"
+uuid = "a945a9ba-879e-550e-aa45-2a4d52798e91"
+version = "0.2.2"
+
+[[deps.WordTokenizers]]
+deps = ["DataDeps", "HTML_Entities", "StrTables", "Unicode"]
+git-tree-sha1 = "01dd4068c638da2431269f49a5964bf42ff6c9d2"
+uuid = "796a5d58-b03d-544a-977e-18100b691f6e"
+version = "0.5.6"
+
 [[deps.WorkerUtilities]]
 git-tree-sha1 = "cd1659ba0d57b71a464a29e64dbc67cfe83d54e7"
 uuid = "76eceee3-57b5-4d4a-8e66-0e911cebbf60"
@@ -626,16 +829,20 @@ version = "17.4.0+0"
 # ╔═╡ Cell order:
 # ╠═13f35ab2-2f4f-4f93-95f4-f5043631da83
 # ╠═0941c3fc-bac8-11ed-11d5-6318de0d8aec
+# ╠═cb9d1be7-1f36-4d26-a084-1f5c64354757
+# ╠═9b511634-3d10-4f65-8c22-fdefd45b7116
+# ╠═b65c317d-291e-4d79-91ed-61cc50c9161c
+# ╠═ee84f78e-c83f-4102-8cf7-64c2cd390ffc
+# ╠═83909f15-6987-496b-b614-9094cebd3a70
+# ╠═589917d6-aa38-4fda-96b1-4a0915895ffd
 # ╠═d6f94c81-37b6-400e-b9f3-78d6bb760f44
 # ╠═fb843426-f11e-4484-b4e1-3121a230c2fd
-# ╠═589917d6-aa38-4fda-96b1-4a0915895ffd
 # ╠═372dbfac-2aa8-4016-912c-5439e5969c08
 # ╠═91462e0d-101c-4a46-8232-1a77897f9baf
-# ╠═8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
+# ╠═86fca170-8f65-468c-99e6-391185e47274
 # ╠═dafe5b70-0192-401a-8cb7-cf9f47615b8a
-# ╠═a81bbd73-5dbf-4711-bd5a-bcb716560cfd
-# ╠═1059e83e-ddd9-47f2-a967-eaa794e9fe13
-# ╠═e43bf442-39dc-44fc-b631-85402db7ddec
+# ╠═3b763a58-1c38-416b-9287-ab22b674472c
+# ╠═8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
 # ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
