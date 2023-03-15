@@ -5,73 +5,138 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
-using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis, WordNet
+using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis
 
-# ╔═╡ 0941c3fc-bac8-11ed-11d5-6318de0d8aec
-module Spacy
-using Conda, PyCall
+# ╔═╡ 83909f15-6987-496b-b614-9094cebd3a70
+const STOPWORDS = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
 
-export spacy
-const python3 = joinpath(Conda.python_dir(Conda.ROOTENV), "python3")
-const spacy = pyimport("spacy")
-const spacyMatcher = pyimport("spacy.matcher")
-const spacyPipe = pyimport("spacy.pipeline")
-const spacyLang = pyimport("spacy.language")
+# ╔═╡ 09889dda-683a-43d9-8283-eebb9d14e27d
+const vowels = "aeiou"
 
-function load(model::String="en_core_web_sm")
-    try
-        spacy.load(model)
-    catch ex
-        if isa(ex, PyError) && getfield(ex, :exception) == PyObject(pyimport("ImportError"))
-            run(`$python3 -m spacy download $model`)
-            spacy.load(model)
-        else
-            rethrow()
+# ╔═╡ d8d1b080-6cb5-4fbf-a1b3-f5c59543eff9
+const irregular_nouns = CSV.read("../data/grammer/irregular_nouns.csv", DataFrame)
+
+# ╔═╡ c7adbb77-0749-4982-a389-f522d670f99f
+const TAG_MAP = Dict(
+    "AJ" => "ADJ",
+    "AT0" => "DET",
+    "AV" => "ADV",
+    "CJC" => "CCONJ",
+    "CJS" => "SCONJ",
+    "CJT" => "SCONJ",
+    "CRD" => "NUM",
+    "ORD" => "NUM",
+    "DPS" => "PRON",
+    "DT0" => "DET",
+    "DTQ" => "DET",
+    "EX0" => "PRON",
+    "ITJ" => "INTJ",
+    "NN0" => "NOUN",
+    "NN1" => "NOUN",
+    "NN2" => "NOUN",
+    "NPO" => "PROPN",
+    "PN" => "PRON",
+    "POS" => "PART",
+    "TO0" => "PART",
+    "XX0" => "PART",
+    "ZZ0" => "PART",
+    "PR" => "ADP",
+    "PU" => "PUNCT",
+    "UNC" => "NOUN",
+    r"^V(?!V)" => "AUX",
+    r"^V" => "VERB",
+)
+
+# ╔═╡ 4b255ac9-5568-46f0-96b1-de1345e34334
+function noun_to_singular(word::AbstractString)
+    word = lowercase(string(word))
+	
+    if length(word) < 2
+        return word
+	end
+    if word in eachrow(irregular_nouns)
+        return irregular_nouns[word]
+	end
+	
+    if endswith(word, "s")
+        if length(word) > 3
+            # Case: thieves
+            if endswith(word, "ves")
+                if length(word[1:end-3]) > 2
+                    return replace(word, "ves" => "f")
+                else
+                    return replace(word, "ves" => "fe")
+				end
+			end
+            # Case: stories
+            if endswith(word, "ies")
+                return replace(word, "ies" => "y")
+			end
+            # Case: echoes
+            if endswith(word, "es")
+                 if endswith(word, "ses") && word[end-3] in vowels
+        			return word[1:end-2]
+			    end
+                if word.endswith("zzes")
+                    return replace(word, "zzes" => "z")
+				end
+                return word[:end-2]
+			end
+            if endswith(word, "ys")
+                return replace(word, "ys" => "y")
+			end
+            return word[1:end-1]
+		end
+    return word
+	end
+end
+
+# ╔═╡ ac5b4ae2-7bff-405f-9f0c-24b444598d60
+# filter the pos-grammer file and add it to a dict
+open("../data/grammer/pos-grammer") do file
+	lemma_dict = Dict{String, Dict{String, String}}()
+    for line in eachline(file)
+        parts = split(line, "->")
+        if length(parts) < 2
+            continue
+        end
+        lemma = lowercase(strip(parts[1]))
+        forms = split(parts[2], ",")
+        for form in forms
+            data = split(form, ">")
+			tag = for (key, val) in TAG_MAP
+        			if occursin(key, strip(replace(data[1], "<" => "")))
+            			return val
+        			end
+    			end
+            word = lowercase(strip(data[2]))
+            lemma_dict[word] = get(lemma_dict, word, Dict())
+            lemma_dict[word][tag] = lemma
         end
     end
+    return lemma_dict
 end
 
-# Define language
-module language
-using PyCall
-const spacyLang = pyimport("spacy.language")
-function from_config(x)
-    spacyLang.Language.from_config(x)
-end
-function component(x, y)
-    spacyLang.Language.component(x, func=y)
-end
-end
-
-function matcher_add(x, y, z)
-    if isnothing(z)
-        spacyMatcher.matcher.add(x, y, on_match=z)
-    else
-        spacyMatcher.matcher.add(x, y)
+# ╔═╡ 1875e69c-176f-4cf8-912a-8b1184f4f4d4
+# actual lemmatize function
+function lemmatize(word::AbstractString, pos::AbstractString)
+	if (pos == "NOUN")
+		return noun_to_singular(word)
+	elseif word in keys(word_lemma_dict) && pos in keys(word_lemma_dict[word])
+        return word_lemma_dict[word][pos]
     end
+    return word
 end
-
-function matcher_remove(x)
-    spacyMatcher.matcher.remove(x)
-end
-
-function matcher_get(x)
-    return spacyMatcher.matcher.get(x)
-end
-
-function EntityRuler(x)
-	spacyPipe.EntityRuler(x, overwrite_ents=true)
-end
-end # End of Spacy Module
 
 # ╔═╡ cb9d1be7-1f36-4d26-a084-1f5c64354757
+# achieve all tags from a file document and add into a dict
 function nerify(file)
 	dict = Dict{String, Vector{String}}()
     lines = readlines(file)
     n = length(lines)
     values = Vector{Vector{String}}(undef, n)
     keys = Vector{String}(undef, n)
-    @inbounds for i in 1:n
+    for i in 1:n
         line = split(lines[i])
         keys[i] = line[1]
         values[i] = line[2:end]
@@ -89,7 +154,7 @@ function ner_tag(dict::Dict{String, Vector{String}}, search_term::String)
             return tag
         end
     end
-    return ""
+    return nothing
 end
 
 # ╔═╡ b65c317d-291e-4d79-91ed-61cc50c9161c
@@ -103,43 +168,11 @@ function reg_vocab_crps(crps_path)
     return Vocabulary(collect(filter(w -> word_freq[w] > 1, keys(word_freq)))) 
 end
 
-# ╔═╡ 83909f15-6987-496b-b614-9094cebd3a70
-const STOPWORDS = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
-
 # ╔═╡ 589917d6-aa38-4fda-96b1-4a0915895ffd
 # checks if a word is a stopword => Returns a bool
 function is_stopword(x)::Bool
     return x in STOPWORDS
 end
-
-# ╔═╡ 91462e0d-101c-4a46-8232-1a77897f9baf
-# ╠═╡ skip_as_script = true
-#=╠═╡
-# define spacy nlp
-nlp = Spacy.load("en_core_web_md")
-  ╠═╡ =#
-
-# ╔═╡ fb843426-f11e-4484-b4e1-3121a230c2fd
-# ╠═╡ skip_as_script = true
-#=╠═╡
-# lemmatize word(s)
-function lemmatize(x)
-	if !isempty(x)
-		num_tokens = length(x)
-		new_text = Vector{UInt8}(undef, length(x) + num_tokens - 1)
-		idx = 1
-		for (i, token) in enumerate(tokenize(x))
-			new_text[idx:idx+length(nlp(token)[1].lemma_)-1] .= codeunits(nlp(token)[1].lemma_)
-			idx += length(nlp(token)[1].lemma_)
-			if i < num_tokens
-            	new_text[idx] = ' '
-            	idx += 1
-        	end
-		end
-		return String(new_text[1:idx-1])
-	end
-end
-  ╠═╡ =#
 
 # ╔═╡ 86fca170-8f65-468c-99e6-391185e47274
 # define native vocab impl.
@@ -238,26 +271,20 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-Conda = "8f4d0f93-b110-5947-807f-2305c1781a2d"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 TextAnalysis = "a2db99b7-8b79-58f8-94bf-bbc811eef33d"
 Word2Vec = "c64b6f0f-98cd-51d1-af78-58ae84944834"
-WordNet = "a945a9ba-879e-550e-aa45-2a4d52798e91"
 
 [compat]
 BenchmarkTools = "~1.3.2"
 CSV = "~0.10.9"
-Conda = "~1.8.0"
 Crayons = "~4.1.1"
 DataFrames = "~1.5.0"
-PyCall = "~1.95.1"
 TextAnalysis = "~0.7.3"
 Word2Vec = "~0.5.3"
-WordNet = "~0.2.2"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -266,7 +293,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "bd74d91090021d1cdeacccec73b09d578d36891d"
+project_hash = "29f0ab215cb954b1e97b8772daae23fbfcc3927c"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -323,12 +350,6 @@ version = "4.6.1"
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 version = "1.0.1+0"
-
-[[deps.Conda]]
-deps = ["Downloads", "JSON", "VersionParsing"]
-git-tree-sha1 = "e32a90da027ca45d84678b826fffd3110bb3fc90"
-uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
-version = "1.8.0"
 
 [[deps.Crayons]]
 git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
@@ -517,12 +538,6 @@ git-tree-sha1 = "cedb76b37bc5a6c702ade66be44f831fa23c681e"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.0"
 
-[[deps.MacroTools]]
-deps = ["Markdown", "Random"]
-git-tree-sha1 = "42324d08725e200c23d4dfb549e0d5d89dede2d2"
-uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.10"
-
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
@@ -619,12 +634,6 @@ deps = ["Distributed", "Printf"]
 git-tree-sha1 = "d7a7aef8f8f2d537104f170139553b14dfe39fe9"
 uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
 version = "1.7.2"
-
-[[deps.PyCall]]
-deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
-git-tree-sha1 = "62f417f6ad727987c755549e9cd88c46578da562"
-uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
-version = "1.95.1"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -765,11 +774,6 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
-[[deps.VersionParsing]]
-git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
-uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
-version = "1.3.0"
-
 [[deps.WeakRefStrings]]
 deps = ["DataAPI", "InlineStrings", "Parsers"]
 git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
@@ -787,12 +791,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "264768df753f8328295d7b7cff55edc52f180284"
 uuid = "9fbe4022-c126-5389-b4b2-756cc9f654d0"
 version = "0.1.0+0"
-
-[[deps.WordNet]]
-deps = ["DataDeps", "Test"]
-git-tree-sha1 = "a7a63f03bb14928edb05042ea555704890f8465e"
-uuid = "a945a9ba-879e-550e-aa45-2a4d52798e91"
-version = "0.2.2"
 
 [[deps.WordTokenizers]]
 deps = ["DataDeps", "HTML_Entities", "StrTables", "Unicode"]
@@ -828,17 +826,20 @@ version = "17.4.0+0"
 
 # ╔═╡ Cell order:
 # ╠═13f35ab2-2f4f-4f93-95f4-f5043631da83
-# ╠═0941c3fc-bac8-11ed-11d5-6318de0d8aec
+# ╠═83909f15-6987-496b-b614-9094cebd3a70
+# ╠═09889dda-683a-43d9-8283-eebb9d14e27d
+# ╠═d8d1b080-6cb5-4fbf-a1b3-f5c59543eff9
+# ╠═c7adbb77-0749-4982-a389-f522d670f99f
+# ╠═4b255ac9-5568-46f0-96b1-de1345e34334
+# ╠═ac5b4ae2-7bff-405f-9f0c-24b444598d60
+# ╠═1875e69c-176f-4cf8-912a-8b1184f4f4d4
 # ╠═cb9d1be7-1f36-4d26-a084-1f5c64354757
 # ╠═9b511634-3d10-4f65-8c22-fdefd45b7116
 # ╠═b65c317d-291e-4d79-91ed-61cc50c9161c
 # ╠═ee84f78e-c83f-4102-8cf7-64c2cd390ffc
-# ╠═83909f15-6987-496b-b614-9094cebd3a70
 # ╠═589917d6-aa38-4fda-96b1-4a0915895ffd
 # ╠═d6f94c81-37b6-400e-b9f3-78d6bb760f44
-# ╠═fb843426-f11e-4484-b4e1-3121a230c2fd
 # ╠═372dbfac-2aa8-4016-912c-5439e5969c08
-# ╠═91462e0d-101c-4a46-8232-1a77897f9baf
 # ╠═86fca170-8f65-468c-99e6-391185e47274
 # ╠═dafe5b70-0192-401a-8cb7-cf9f47615b8a
 # ╠═3b763a58-1c38-416b-9287-ab22b674472c
