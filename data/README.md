@@ -11,10 +11,10 @@ Furthermore, the `dataset.csv` file contains questions with answers to them. The
 - [discord-scraper](https://github.com/PJ-Duo/discord-scraper) `=>` Scraps a discord channel with the data being in "message and reply to the message" format
 - [JSON-to-CSV-Data-Cleaner](https://github.com/PJ-Duo/JSON-to-CSV-Data-Cleaner) `=>` Converts JSON data to CSV format while filtering and cleaning the data
 
-Lastly, ensure you have word vectors. For getting word vectors you need to have a large corpus with alot of words (like the wiki method mentioned at the beginning), and then use [Word2Vec.jl](https://github.com/JuliaText/Word2Vec.jl) to convert the large corpus into vectors. Remember, the more words converted to vectors, the more accurate when it comes to processing. After you're done with converting, place the file inside the `vecs` folder under the name `vec-pretrained`.
+Lastly, ensure you have word vectors. For getting word vectors you need to have a large corpus with alot of words (like the wiki method mentioned at the beginning), and then using [Word2Vec.jl](https://github.com/JuliaText/Word2Vec.jl) to convert the large corpus into vectors. Remember, the more words converted to vectors, the more accurate when it comes to processing, and the more words included in the AI's vocab. After you're done with converting, place the file inside the `vecs` folder under the name `vec-pretrained`.
 
 
-Please note that the files inside of the `vecs` and `crps` are just placeholders and are meant to be replaced.
+Please note that the files inside of `vecs` and `crps` are just placeholders and are meant to be replaced. Also, the `crps` folder doesn't get used inside of the SourceCode directly, it is used for training externally only, and for organization purposes.
 
 
 ## Data(s) provided with PJ_Judge
