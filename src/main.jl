@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
-using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis
+using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis, StatsBase, Profile
 
 # ╔═╡ 83909f15-6987-496b-b614-9094cebd3a70
 const STOPWORDS = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
@@ -92,7 +92,7 @@ function noun_to_singular(word::AbstractString)
 end
 
 # ╔═╡ ac5b4ae2-7bff-405f-9f0c-24b444598d60
-# filter the pos-grammer file and add it to a dict
+# filter the pos-grammer file & add it to a dict
 open("../data/grammer/pos-grammer") do file
 	lemma_dict = Dict{String, Dict{String, String}}()
     for line in eachline(file)
@@ -156,8 +156,7 @@ function ner_tag(dict::Dict{String, Vector{String}}, search_term::String)
         if any(x -> search_term in split(x), values)
             return tag
         end
-    end
-    return dict
+	end 
 end
 
 # ╔═╡ 589917d6-aa38-4fda-96b1-4a0915895ffd
@@ -209,6 +208,7 @@ function rm_oov_punc(x)
 end
 
 # ╔═╡ 3b763a58-1c38-416b-9287-ab22b674472c
+# define dict for named entitiy recognization 
 ner_model = nerify("../data/ner/ner")
 
 # ╔═╡ 8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
@@ -219,6 +219,50 @@ print(Crayon(foreground = :green), Crayon(bold = true), "> ", Crayon(reset = tru
 
 # ╔═╡ 2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 startup = readline()
+
+# ╔═╡ 4ba3d81d-365f-4670-af48-5c9a7ce1a7ae
+function conclude_return(x)
+	y = rm_oov_punc(lowercase(x))
+
+	if isempty(strip(y))
+		return "Sorry, I don't understand. can you rephrase?"
+	end
+
+	# LAYER 1
+	# ranking => (4/4) fastest and high accuracy 
+	# desc => filter by pre-defined NER tags
+	filtered_ds = filter(row -> any(x -> in(x, filter(x -> !isnothing(x), Set(ner_tag(ner_model, ent) for ent in tokenize(y)))), filter(x -> !isnothing(x), [ner_tag(ner_model, ent) for ent in tokenize(lowercase(row.query))])), dataset)
+
+	# LAYER 2
+	# ranking => (3.5/4) fast enough and decent accuracy
+	# note => this layer is dependent on layer 1's outcome
+	# desc => filter by using countmap (getting vital words out of string)
+	y_countmap = collect(keys(countmap(tokenize(y))))
+	filtered_ds = (nrow(filtered_ds) == 0) ? filter(row -> length(tokenize(y)) >= 2 ? all(x -> x in tokenize(lowercase(row.query)), y_countmap[1:2]) : all(x -> x in tokenize(lowercase(row.query)), [y_countmap[1]]), dataset) : filtered_ds
+	
+	# LAYER 3
+	# ranking => (2.5/4) slowest but extremely accurate at times
+	# note => this layer is dependent on layer 1 or 2's outcome
+	# desc => last layer uses the entirity of the dataset 
+	filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
+	
+	sim_arr = Vector{Float64}()
+	for row in eachrow(filtered_ds)
+		x = rm_oov_punc(lowercase(row[1]))
+		try
+			push!(sim_arr, dot(vectorize(x), vectorize(y)) / (norm(vectorize(x)) * norm(vectorize(y))))
+		catch
+			push!(sim_arr, 0.0)
+		end
+		if length(sim_arr) == nrow(filtered_ds)
+			if maximum(sim_arr) >= 0.7
+				return filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2]
+			else
+				return "Sorry, I'm not trained enough to answer that."
+			end
+		end
+	end
+end
 
 # ╔═╡ bf60a9d5-4047-485e-9f91-a385703cd518
 if lowercase(startup) == "chat"
@@ -231,32 +275,17 @@ if lowercase(startup) == "chat"
 			continue
 		end
 
-		y = rm_oov_punc(lowercase(chatInput))
-		y_ner_tags = Set(ner_tag(ner_model, ent) for ent in tokenize(y))
-		
-		filtered_ds = filter(row -> any(x -> in(x, y_ner_tags), [ner_tag(ner_model, ent) for ent in tokenize(lowercase(row.query))]), dataset)
-
-		filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
-
-		sim_arr = Vector{Float64}()
-		for row in eachrow(filtered_ds)
-			x = rm_oov_punc(lowercase(row[1]))
-				
-			push!(sim_arr, dot(vectorize(x), vectorize(y)) / (norm(vectorize(x)) * norm(vectorize(y))))
-			if length(sim_arr) == nrow(filtered_ds)
-				if maximum(sim_arr) >= 0.7
-					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2])
-				else
-					println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), "Sorry, I'm not trained enough to answer that question.")
-				end
-				empty!(sim_arr)
-				break
-			end
-		end
+		println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), conclude_return(chatInput))
 	end
 elseif lowercase(startup) == "exit"
 	exit()
 end
+
+# ╔═╡ 8f55a9b3-4347-46f6-b837-9baa8710708e
+# ╠═╡ skip_as_script = true
+#=╠═╡
+conclude_return("is ChatGPT better then you")
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -266,7 +295,9 @@ CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TextAnalysis = "a2db99b7-8b79-58f8-94bf-bbc811eef33d"
 Word2Vec = "c64b6f0f-98cd-51d1-af78-58ae84944834"
 
@@ -275,6 +306,7 @@ BenchmarkTools = "~1.3.2"
 CSV = "~0.10.9"
 Crayons = "~4.1.1"
 DataFrames = "~1.5.0"
+StatsBase = "~0.33.21"
 TextAnalysis = "~0.7.3"
 Word2Vec = "~0.5.3"
 """
@@ -285,7 +317,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "29f0ab215cb954b1e97b8772daae23fbfcc3927c"
+project_hash = "1a813f34f71c812e0c6dc6fc0ccd8971604e141c"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -838,6 +870,8 @@ version = "17.4.0+0"
 # ╠═8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
 # ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
+# ╠═4ba3d81d-365f-4670-af48-5c9a7ce1a7ae
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
+# ╠═8f55a9b3-4347-46f6-b837-9baa8710708e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
