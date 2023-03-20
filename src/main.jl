@@ -49,12 +49,11 @@ const TAG_MAP = Dict(
 
 # ╔═╡ 4b255ac9-5568-46f0-96b1-de1345e34334
 function noun_to_singular(word::AbstractString)
-    word = lowercase(string(word))
+    word = lowercase(word)
 	
     if length(word) < 2
         return word
-	end
-    if word in eachrow(irregular_nouns)
+	elseif word in eachrow(irregular_nouns)
         return irregular_nouns[word]
 	end
 	
@@ -89,6 +88,7 @@ function noun_to_singular(word::AbstractString)
 		end
     return word
 	end
+	return word
 end
 
 # ╔═╡ ac5b4ae2-7bff-405f-9f0c-24b444598d60
@@ -116,6 +116,9 @@ open("../data/grammer/pos-grammer") do file
     end
     return lemma_dict
 end
+
+# ╔═╡ d8e9a7f7-8930-4181-b6e1-9947baf8e113
+word_lemma_dict = Dict{String, Dict{String, String}}()
 
 # ╔═╡ 1875e69c-176f-4cf8-912a-8b1184f4f4d4
 # actual lemmatize function
@@ -154,18 +157,7 @@ function ner_tag(dict::Dict{String, Vector{String}}, search_term::String)
             return tag
         end
     end
-    return nothing
-end
-
-# ╔═╡ b65c317d-291e-4d79-91ed-61cc50c9161c
-function reg_vocab_crps(crps_path)
-	word_freq = Dict{String, Int}()
-	for line in eachline(crps_path)
-		for word in split(line)
-	    	word_freq[word] = get(word_freq, word, 0) + 1
-		end
-	end
-    return Vocabulary(collect(filter(w -> word_freq[w] > 1, keys(word_freq)))) 
+    return dict
 end
 
 # ╔═╡ 589917d6-aa38-4fda-96b1-4a0915895ffd
@@ -174,9 +166,19 @@ function is_stopword(x)::Bool
     return x in STOPWORDS
 end
 
+# ╔═╡ dafe5b70-0192-401a-8cb7-cf9f47615b8a
+# define & load word vectors
+vec_model = wordvectors("../data/vecs/vec-pretrained")
+
+# ╔═╡ 372dbfac-2aa8-4016-912c-5439e5969c08
+# vectorizes a string of text
+function vectorize(x)
+	return mean([in_vocabulary(vec_model, word) ? get_vector(vec_model, word) : zeros(Float64, 100) for word in split(x)])
+end
+
 # ╔═╡ 86fca170-8f65-468c-99e6-391185e47274
 # define native vocab impl.
-vocabn = reg_vocab_crps("../data/crps/corpus")
+vocabn = Vocabulary(vocabulary(vec_model))
 
 # ╔═╡ ee84f78e-c83f-4102-8cf7-64c2cd390ffc
 # checks if a word is out-of-vocab => Returns a bool
@@ -204,16 +206,6 @@ function rm_oov_punc(x)
     end
 	
 	return String(new_text[1:idx-1])
-end
-
-# ╔═╡ dafe5b70-0192-401a-8cb7-cf9f47615b8a
-# define & load word vectors
-vec_model = wordvectors("../data/vecs/vec-pretrained")
-
-# ╔═╡ 372dbfac-2aa8-4016-912c-5439e5969c08
-# vectorizes a string of text
-function vectorize(x)
-	return mean([in_vocabulary(vec_model, word) ? get_vector(vec_model, word) : zeros(Float64, 100) for word in split(x)])
 end
 
 # ╔═╡ 3b763a58-1c38-416b-9287-ab22b674472c
@@ -832,16 +824,16 @@ version = "17.4.0+0"
 # ╠═c7adbb77-0749-4982-a389-f522d670f99f
 # ╠═4b255ac9-5568-46f0-96b1-de1345e34334
 # ╠═ac5b4ae2-7bff-405f-9f0c-24b444598d60
+# ╠═d8e9a7f7-8930-4181-b6e1-9947baf8e113
 # ╠═1875e69c-176f-4cf8-912a-8b1184f4f4d4
 # ╠═cb9d1be7-1f36-4d26-a084-1f5c64354757
 # ╠═9b511634-3d10-4f65-8c22-fdefd45b7116
-# ╠═b65c317d-291e-4d79-91ed-61cc50c9161c
 # ╠═ee84f78e-c83f-4102-8cf7-64c2cd390ffc
 # ╠═589917d6-aa38-4fda-96b1-4a0915895ffd
 # ╠═d6f94c81-37b6-400e-b9f3-78d6bb760f44
 # ╠═372dbfac-2aa8-4016-912c-5439e5969c08
-# ╠═86fca170-8f65-468c-99e6-391185e47274
 # ╠═dafe5b70-0192-401a-8cb7-cf9f47615b8a
+# ╠═86fca170-8f65-468c-99e6-391185e47274
 # ╠═3b763a58-1c38-416b-9287-ab22b674472c
 # ╠═8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
 # ╠═9b543c72-1e9f-449b-8b45-2a51c4ae1a4c
