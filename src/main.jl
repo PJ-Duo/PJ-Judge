@@ -8,7 +8,7 @@ using InteractiveUtils
 using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis, StatsBase, Profile
 
 # ╔═╡ 83909f15-6987-496b-b614-9094cebd3a70
-const STOPWORDS = Set(["a", "an", "the", "and", "or", "but", "not", "for", "of", "at", "by", "from", "in", "on", "to", "with"])
+const STOPWORDS = Set(split(readlines(open("../data/stopwords/stopwords", "r"))[1]))
 
 # ╔═╡ 09889dda-683a-43d9-8283-eebb9d14e27d
 const vowels = "aeiou"
@@ -204,7 +204,7 @@ function rm_oov_punc(x)
         end
     end
 	
-	return String(new_text[1:idx-1])
+	return strip(String(new_text[1:idx-1]))
 end
 
 # ╔═╡ 3b763a58-1c38-416b-9287-ab22b674472c
@@ -284,7 +284,7 @@ end
 # ╔═╡ 8f55a9b3-4347-46f6-b837-9baa8710708e
 # ╠═╡ skip_as_script = true
 #=╠═╡
-conclude_return("is ChatGPT better then you")
+conclude_return("what is liemcomputing")
   ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -317,7 +317,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "1a813f34f71c812e0c6dc6fc0ccd8971604e141c"
+project_hash = "a9198e06baf7723bd0fbadd4627bc9bbbe90b706"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
