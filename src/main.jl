@@ -319,9 +319,6 @@ elseif lowercase(startup) == "exit"
 	exit()
 end
 
-# ╔═╡ c3a2fd0f-74f6-43be-a746-720a5df70a73
-conclude_return("currency of iran")
-
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -1253,6 +1250,5 @@ version = "17.4.0+0"
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 # ╠═4ba3d81d-365f-4670-af48-5c9a7ce1a7ae
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
-# ╠═c3a2fd0f-74f6-43be-a746-720a5df70a73
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
