@@ -21,7 +21,7 @@ Please note that the files inside of `vecs` and `crps` are just placeholders and
 
 The `grammer` and `ner` directories are both provided by PJ_Judge. 
 
-The grammer folder contains three files: `pos-grammer`, `pos-pretrained`, and `irregular_nouns.csv`. `pos-grammer` being a corpus of Part-of-Speech (POS) grammers and is a list of lemmas and variations extracted from the British National Corpus (BNC). `pos-pretrained`is a pretrained file that includes sentences with their POS tag assigned, and is used to train the POS-tagger. `irregular_nouns.csv` is a list of irregular nouns and their singular form used for handling the case of plural nouns.
+The grammer folder contains three directories: `pos-grammer`, `pos-pretrained`, and `irregular_nouns.csv`. `pos-grammer` being a corpus of Part-of-Speech (POS) grammers and is a list of lemmas and variations extracted from the British National Corpus (BNC). `pos-pretrained`is a pretrained file that includes sentences with their POS tag assigned, and is used to train the POS-tagger. `irregular_nouns.csv` is a list of irregular nouns and their singular form used for handling the case of plural nouns.
 
 The `ner` folder contains a `ner` file and the file is used for named entity recognition, which helps majorly when it comes to decision making of PJ_Judge. Pay close attention to the format, but to sum it up, the first word in each line represents the tag name, and the rest following with a space are the entities of the tag. 
 
