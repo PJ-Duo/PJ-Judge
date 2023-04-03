@@ -14,7 +14,7 @@ Furthermore, the `dataset.csv` file contains questions with answers to them. The
 Lastly, ensure you have word vectors. For getting word vectors you need to have a large corpus with alot of words (like the wiki method mentioned at the beginning), and then using [Word2Vec.jl](https://github.com/JuliaText/Word2Vec.jl) to convert the large corpus into vectors. Remember, the more words converted to vectors, the more accurate when it comes to processing, and the more words included in the AI's vocab. After you're done with converting, place the file inside the `vecs` folder under the name `vec-pretrained`.
 
 
-Please note that the files inside of `vecs` and `crps` are just placeholders and are meant to be replaced. Also, the `crps` folder doesn't get used inside of the SourceCode directly, it is used for training externally only, and for organization purposes.
+Please note that the files inside of `vecs` and `crps` are just placeholders and are meant to be replaced. Also, the `crps` folder doesn't get used inside of the SourceCode directly, it is used only for training externally, and organization purposes.
 
 
 ## Data(s) provided with PJ_Judge
