@@ -13,13 +13,11 @@ using Distributed, DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Rand
 # ╔═╡ 83909f15-6987-496b-b614-9094cebd3a70
 const STOPWORDS = Set(split(readlines(open("../data/stopwords/stopwords", "r"))[1]))
 
-# ╔═╡ 09889dda-683a-43d9-8283-eebb9d14e27d
-const vowels = "aeiou"
-
 # ╔═╡ d8d1b080-6cb5-4fbf-a1b3-f5c59543eff9
 const irregular_nouns = CSV.read("../data/grammer/irregular_nouns.csv", DataFrame)
 
 # ╔═╡ c7adbb77-0749-4982-a389-f522d670f99f
+# https://universaldependencies.org/u/pos/all.html#al-u-pos/
 const TAG_MAP = Dict(
     "AJ" => "ADJ",
     "AT0" => "DET",
@@ -30,22 +28,22 @@ const TAG_MAP = Dict(
     "CRD" => "NUM",
     "ORD" => "NUM",
     "DPS" => "PRON",
+	"EX0" => "PRON",
+	"PN" => "PRON",
     "DT0" => "DET",
     "DTQ" => "DET",
-    "EX0" => "PRON",
     "ITJ" => "INTJ",
     "NN0" => "NOUN",
     "NN1" => "NOUN",
     "NN2" => "NOUN",
+	"UNC" => "NOUN",
     "NPO" => "PROPN",
-    "PN" => "PRON",
     "POS" => "PART",
     "TO0" => "PART",
     "XX0" => "PART",
     "ZZ0" => "PART",
     "PR" => "ADP",
     "PU" => "PUNCT",
-    "UNC" => "NOUN",
     r"^V(?!V)" => "AUX",
     r"^V" => "VERB",
 )
@@ -76,13 +74,13 @@ function noun_to_singular(word::AbstractString)
 			end
             # Case: echoes
             if endswith(word, "es")
-                 if endswith(word, "ses") && word[end-3] in vowels
+                if endswith(word, "ses") && word[end-3] in "aeiou"
         			return word[1:end-2]
 			    end
-                if word.endswith("zzes")
+                if endswith(word, "zzes")
                     return replace(word, "zzes" => "z")
 				end
-                return word[:end-2]
+                return word[1:length(word)-2]
 			end
             if endswith(word, "ys")
                 return replace(word, "ys" => "y")
@@ -95,12 +93,11 @@ function noun_to_singular(word::AbstractString)
 end
 
 # ╔═╡ d8e9a7f7-8930-4181-b6e1-9947baf8e113
-word_lemma_dict = Dict{String, Dict{String, String}}()
+lemma_dict = Dict{String, Dict{String, String}}()
 
 # ╔═╡ ac5b4ae2-7bff-405f-9f0c-24b444598d60
 # filter the pos-grammer file & add it to a dict
 open("../data/grammer/pos-grammer") do file
-	lemma_dict = Dict{String, Dict{String, String}}()
     for line in eachline(file)
         parts = split(line, "->")
         if length(parts) < 2
@@ -110,27 +107,15 @@ open("../data/grammer/pos-grammer") do file
         forms = split(parts[2], ",")
         for form in forms
             data = split(form, ">")
-			tag = for (key, val) in TAG_MAP
-        			if occursin(key, strip(replace(data[1], "<" => "")))
-            			return val
-        			end
-    			end
-            word = lowercase(strip(data[2]))
-            word_lemma_dict[word] = get(word_lemma_dict, word, Dict())
-            word_lemma_dict[word][tag] = lemma
+			for (key, val) in TAG_MAP
+        		if occursin(key, strip(replace(data[1], "<" => "")))
+					word = lowercase(strip(data[2]))
+            		lemma_dict[word] = get(lemma_dict, word, Dict())
+            		lemma_dict[word][val] = lemma
+        		end
+    		end
         end
     end
-end
-
-# ╔═╡ 1875e69c-176f-4cf8-912a-8b1184f4f4d4
-# actual lemmatize function
-function lemmatize(word::AbstractString, pos::AbstractString)
-	if (pos == "NOUN")
-		return noun_to_singular(word)
-	elseif word in keys(word_lemma_dict) && pos in keys(word_lemma_dict[word])
-        return word_lemma_dict[word][pos]
-    end
-    return word
 end
 
 # ╔═╡ cb9d1be7-1f36-4d26-a084-1f5c64354757
@@ -171,7 +156,7 @@ end
 @info "STARTUP => loading word vecs..."
 
 # ╔═╡ dafe5b70-0192-401a-8cb7-cf9f47615b8a
-# define & load word vectors
+# define & load pretrained word vectors
 vec_model = wordvectors("../data/vecs/vec-pretrained")
 
 # ╔═╡ 372dbfac-2aa8-4016-912c-5439e5969c08
@@ -188,7 +173,7 @@ end
 vocabn = Vocabulary(vocabulary(vec_model))
 
 # ╔═╡ ee84f78e-c83f-4102-8cf7-64c2cd390ffc
-# checks if a word is out-of-vocab => Returns a bool
+# check if a word is out-of-vocab => Returns a bool
 function is_oov(x)::Bool
 	return !(x in keys(vocabn.vocab))
 end
@@ -196,23 +181,14 @@ end
 # ╔═╡ d6f94c81-37b6-400e-b9f3-78d6bb760f44
 # rm out-of-vocab word(s) & chars
 function rm_oov_punc(x)
-	ignore_list = []
-	num_tokens = length(x)
-    new_text = Vector{UInt8}(undef, length(x) + num_tokens - 1)
-    idx = 1
+    new_text = string()
     for (i, token) in enumerate(tokenize(x))
         if is_oov(token) || is_stopword(token)
             continue
         end
-        new_text[idx:idx+length(token)-1] .= codeunits(token)
-        idx += length(token)
-        if i < num_tokens
-            new_text[idx] = ' '
-            idx += 1
-        end
+        new_text = string(new_text, token, " ")
     end
-	
-	return strip(String(new_text[1:idx-1]))
+	return string(strip(new_text))
 end
 
 # ╔═╡ 172f1e31-5c64-4615-87fb-7c54bb1b35db
@@ -222,11 +198,59 @@ end
 # define dict for named entitiy recognization 
 ner_model = nerify("../data/ner/ner")
 
+# ╔═╡ 2a091f42-cc41-43f2-9055-c2b943dd3e79
+@info "STARTUP => loading part-of-speech tagger..."
+
+# ╔═╡ 780a5852-6c09-46f3-bc06-ff19c6caa112
+# define part-of-speech tagger impl.
+POStag_model = TextModels.PerceptronTagger(false)
+
+# ╔═╡ 1875e69c-176f-4cf8-912a-8b1184f4f4d4
+# actual lemmatize function
+function lemmatize(sentence::AbstractString)
+	tagged = TextModels.predict(POStag_model, sentence)
+	final = string()
+	for x in tagged
+		if (x[2] == "NOUN")
+			final = string(final, noun_to_singular(x[1]), " ")
+			continue
+		elseif x[1] in keys(lemma_dict) && x[2] in keys(lemma_dict[x[1]])
+        	final = string(final, lemma_dict[x[1]][x[2]], " ")
+			continue
+		else
+			final = string(final, x[1], " ")
+			continue
+		end
+	end
+	return strip(final)
+end
+
+# ╔═╡ c07999ef-09ad-49ee-b56d-c1712418eac1
+# extracts nouns from a sentence using the POStagger
+function nouns(sentence::AbstractString)
+	final = Vector()
+	for x in TextModels.predict(POStag_model, string(sentence))
+		if (x[2] == "NOUN")
+			push!(final, x[1])
+		end
+	end
+	return final
+end
+
+# ╔═╡ 13ea869b-305d-4b0f-8e71-59dbf3dd7e9b
+# train the POStag_model with a pretrained file
+TextModels.fit!(POStag_model, [Tuple{String, String}[(string(words_and_tags[i]), string(words_and_tags[i+1])) for i=1:2:length(words_and_tags)-1] for words_and_tags in (split(sentence, " ") for sentence in readlines("../data/grammer/pos-pretrained"))])
+
 # ╔═╡ 5f6b28f9-aba6-4f1d-a4f9-7fb29045c1d8
 @info "STARTUP => loading the dataset..."
 
 # ╔═╡ 8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
-dataset = deleteat!(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)), [i for (i, row) in enumerate(eachrow(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)))) if isnothing(rm_oov_punc(lowercase(row[1])))])
+dataset = deleteat!(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)), [i for (i, row) in enumerate(eachrow(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)))) if isnothing(row[1])])
+
+# ╔═╡ 48dedd6a-0f7f-4cd0-b6a5-6822614bedb9
+for row in eachrow(dataset)
+	row[1] = lemmatize(rm_oov_punc(lowercase(row[1])))
+end
 
 # ╔═╡ a64328d7-f0a8-40ec-b499-fcbc01db8d03
 df_NERified_arr = [filter(!isnothing, [ner_tag(ner_model, ent) for ent in tokenize(rm_oov_punc(lowercase(row.query)))]) for row in eachrow(dataset)]
@@ -245,39 +269,29 @@ startup = readline()
 
 # ╔═╡ 4ba3d81d-365f-4670-af48-5c9a7ce1a7ae
 function conclude_return(x)
-	y = rm_oov_punc(lowercase(x))
+	y = lemmatize(rm_oov_punc(lowercase(x)))
 
 	if isempty(strip(y))
 		return "Sorry, I don't understand. can you rephrase?"
 	end
 
-	#@info "Processing Layer 1..."
-	
+
 	# LAYER 1
 	# ranking => (4/4) fastest and high accuracy 
 	# desc => filter by pre-defined NER tags
-	ner_tags = filter(x -> !isnothing(x), [ner_tag(ner_model, ent) for ent in tokenize(rm_oov_punc(lowercase(y)))])
+	ner_tags = filter(x -> !isnothing(x), [ner_tag(ner_model, ent) for ent in tokenize(y)])
 	filtered_ds = df_NERified[setdiff(1:nrow(df_NERified), findall(x -> !issubset(x, ner_tags), df_NERified_w_tags)), :]
 
-	#if nrow(filtered_ds) == 0
-	#	@info "Processing Layer 2..."
-	#else
-	#	@info "Skipping Layer 2..."
-	#end
-
 	# LAYER 2
-	# ranking => (3.5/4) fast enough and decent accuracy
+	# ranking => (3/4) fast and accurate
 	# note => this layer is dependent on layer 1's outcome
-	# desc => filter by using countmap (getting vital words out of string)
+	# desc => filter by noun(s) within the input string (manipulating POStagger)
+	# and then filter it further using countmaps
+	input_nouns = nouns(y);
+	filtered_ds = (nrow(filtered_ds) == 0) ? filter((row) -> issubset(input_nouns, split(row.query)), dataset) : filtered_ds
 	y_countmap = collect(keys(countmap(tokenize(y))))
-	filtered_ds = (nrow(filtered_ds) == 0) ? length(tokenize(y)) >= 2 ? filter(row -> all(contains(lowercase(row.query), x) for x in y_countmap[1:2]), dataset) : filter(row -> all(contains(lowercase(row.query), x) for x in y_countmap), dataset) : filtered_ds
+	filtered_ds = length(tokenize(y)) >= 2 ? filter(row -> all(contains(rm_oov_punc(lowercase(row.query)), x) for x in y_countmap[1:2]), filtered_ds) : filter(row -> all(contains(rm_oov_punc(lowercase(row.query)), x) for x in y_countmap), filtered_ds)
 
-	# LAYER 3 (won't be used anymore)
-	# ranking => (1/4) INSANELY slow, inefficient, and lazy but EXTREMELY accurate
-	# note => this layer is dependent on layer 1 or 2's outcome
-	# desc => last layer uses the entirity of the dataset 
-	#filtered_ds = (nrow(filtered_ds) == 0) ? dataset : filtered_ds
-	
 	if nrow(filtered_ds) == 0
 		return "Sorry, I'm not trained enough to answer that."
 	end
@@ -293,7 +307,7 @@ function conclude_return(x)
 		end
 		
 		if length(sim_arr) == nrow(filtered_ds)
-			if maximum(sim_arr) >= 0.7
+			if maximum(sim_arr) >= 0.5
 				return filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2]
 			else
 				return "Sorry, I'm not sure if I have the right answer to that."
@@ -318,6 +332,9 @@ if lowercase(startup) == "chat"
 elseif lowercase(startup) == "exit"
 	exit()
 end
+
+# ╔═╡ e46b816f-c8ec-429f-a5e9-832776dce6de
+conclude_return("canada is the best")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1222,13 +1239,13 @@ version = "17.4.0+0"
 # ╠═13f35ab2-2f4f-4f93-95f4-f5043631da83
 # ╠═df8ed368-6ddd-4d19-bb97-ed1077f55aef
 # ╠═83909f15-6987-496b-b614-9094cebd3a70
-# ╠═09889dda-683a-43d9-8283-eebb9d14e27d
 # ╠═d8d1b080-6cb5-4fbf-a1b3-f5c59543eff9
 # ╠═c7adbb77-0749-4982-a389-f522d670f99f
 # ╠═4b255ac9-5568-46f0-96b1-de1345e34334
 # ╠═d8e9a7f7-8930-4181-b6e1-9947baf8e113
 # ╠═ac5b4ae2-7bff-405f-9f0c-24b444598d60
 # ╠═1875e69c-176f-4cf8-912a-8b1184f4f4d4
+# ╠═c07999ef-09ad-49ee-b56d-c1712418eac1
 # ╠═cb9d1be7-1f36-4d26-a084-1f5c64354757
 # ╠═9b511634-3d10-4f65-8c22-fdefd45b7116
 # ╠═ee84f78e-c83f-4102-8cf7-64c2cd390ffc
@@ -1241,8 +1258,12 @@ version = "17.4.0+0"
 # ╠═903268a2-5dd9-43d2-824c-88cee7c0ce46
 # ╠═172f1e31-5c64-4615-87fb-7c54bb1b35db
 # ╠═3b763a58-1c38-416b-9287-ab22b674472c
+# ╠═2a091f42-cc41-43f2-9055-c2b943dd3e79
+# ╠═780a5852-6c09-46f3-bc06-ff19c6caa112
+# ╠═13ea869b-305d-4b0f-8e71-59dbf3dd7e9b
 # ╠═5f6b28f9-aba6-4f1d-a4f9-7fb29045c1d8
 # ╠═8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
+# ╠═48dedd6a-0f7f-4cd0-b6a5-6822614bedb9
 # ╠═a64328d7-f0a8-40ec-b499-fcbc01db8d03
 # ╠═4c020d02-3e1d-4ddc-b37c-2da431c5ca19
 # ╠═2d07cdec-bdce-4b3c-84fe-f5143d0de820
@@ -1250,5 +1271,6 @@ version = "17.4.0+0"
 # ╠═2ad7bb7b-7152-4354-a5b1-ad003b71b2b1
 # ╠═4ba3d81d-365f-4670-af48-5c9a7ce1a7ae
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
+# ╠═e46b816f-c8ec-429f-a5e9-832776dce6de
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
