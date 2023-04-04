@@ -5,7 +5,13 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
-using Distributed, DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis, TextModels, StatsBase
+using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis, TextModels, StatsBase
+
+# ╔═╡ b7198014-925c-4c55-b83a-7fe40898290a
+# ╠═╡ skip_as_script = true
+#=╠═╡
+Threads.nthreads()
+  ╠═╡ =#
 
 # ╔═╡ df8ed368-6ddd-4d19-bb97-ed1077f55aef
 @info "STARTUP => pkgs integrated. Initilizing..."
@@ -334,7 +340,10 @@ elseif lowercase(startup) == "exit"
 end
 
 # ╔═╡ e46b816f-c8ec-429f-a5e9-832776dce6de
-conclude_return("canada is the best")
+# ╠═╡ skip_as_script = true
+#=╠═╡
+conclude_return("do you eat waffles")
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -343,7 +352,6 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
@@ -368,7 +376,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "c08b43e01dde622171e6f8ba1f74035e5b1565bb"
+project_hash = "003dbb51850c7b06043ea84c0ed04f3f13da9754"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -1237,6 +1245,7 @@ version = "17.4.0+0"
 
 # ╔═╡ Cell order:
 # ╠═13f35ab2-2f4f-4f93-95f4-f5043631da83
+# ╠═b7198014-925c-4c55-b83a-7fe40898290a
 # ╠═df8ed368-6ddd-4d19-bb97-ed1077f55aef
 # ╠═83909f15-6987-496b-b614-9094cebd3a70
 # ╠═d8d1b080-6cb5-4fbf-a1b3-f5c59543eff9
