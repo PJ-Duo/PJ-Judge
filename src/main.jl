@@ -22,38 +22,6 @@ const STOPWORDS = Set(split(readlines(open("../data/stopwords/stopwords", "r"))[
 # ╔═╡ d8d1b080-6cb5-4fbf-a1b3-f5c59543eff9
 const irregular_nouns = CSV.read("../data/grammer/irregular_nouns.csv", DataFrame)
 
-# ╔═╡ c7adbb77-0749-4982-a389-f522d670f99f
-# https://universaldependencies.org/u/pos/all.html#al-u-pos/
-const TAG_MAP = Dict(
-    "AJ" => "ADJ",
-    "AT0" => "DET",
-    "AV" => "ADV",
-    "CJC" => "CCONJ",
-    "CJS" => "SCONJ",
-    "CJT" => "SCONJ",
-    "CRD" => "NUM",
-    "ORD" => "NUM",
-    "DPS" => "PRON",
-	"EX0" => "PRON",
-	"PN" => "PRON",
-    "DT0" => "DET",
-    "DTQ" => "DET",
-    "ITJ" => "INTJ",
-    "NN0" => "NOUN",
-    "NN1" => "NOUN",
-    "NN2" => "NOUN",
-	"UNC" => "NOUN",
-    "NPO" => "PROPN",
-    "POS" => "PART",
-    "TO0" => "PART",
-    "XX0" => "PART",
-    "ZZ0" => "PART",
-    "PR" => "ADP",
-    "PU" => "PUNCT",
-    r"^V(?!V)" => "AUX",
-    r"^V" => "VERB",
-)
-
 # ╔═╡ 4b255ac9-5568-46f0-96b1-de1345e34334
 function noun_to_singular(word::AbstractString)
     word = lowercase(word)
@@ -113,12 +81,10 @@ open("../data/grammer/pos-grammer") do file
         forms = split(parts[2], ",")
         for form in forms
             data = split(form, ">")
-			for (key, val) in TAG_MAP
-        		if occursin(key, strip(replace(data[1], "<" => "")))
-					word = lowercase(strip(data[2]))
-            		lemma_dict[word] = get(lemma_dict, word, Dict())
-            		lemma_dict[word][val] = lemma
-        		end
+			for key in [strip(replace(data[1], "<" => ""))]
+				word = lowercase(strip(data[2]))
+            	lemma_dict[word] = get(lemma_dict, word, Dict())
+            	lemma_dict[word][key] = lemma
     		end
         end
     end
@@ -1249,7 +1215,6 @@ version = "17.4.0+0"
 # ╠═df8ed368-6ddd-4d19-bb97-ed1077f55aef
 # ╠═83909f15-6987-496b-b614-9094cebd3a70
 # ╠═d8d1b080-6cb5-4fbf-a1b3-f5c59543eff9
-# ╠═c7adbb77-0749-4982-a389-f522d670f99f
 # ╠═4b255ac9-5568-46f0-96b1-de1345e34334
 # ╠═d8e9a7f7-8930-4181-b6e1-9947baf8e113
 # ╠═ac5b4ae2-7bff-405f-9f0c-24b444598d60
