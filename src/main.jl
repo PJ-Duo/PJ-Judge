@@ -271,7 +271,7 @@ function conclude_return(x)
 	#@info "Processing cosine similiarty..."
 	sim_arr = Vector{Float64}()
 	for row in eachrow(filtered_ds)
-		x = rm_oov_punc(lowercase(row[1]))
+		x = lemmatize(rm_oov_punc(lowercase(row[1])))
 		try
 			push!(sim_arr, dot(vectorize(x), vectorize(y)) / (norm(vectorize(x)) * norm(vectorize(y))))
 		catch
@@ -308,7 +308,21 @@ end
 # ╔═╡ e46b816f-c8ec-429f-a5e9-832776dce6de
 # ╠═╡ skip_as_script = true
 #=╠═╡
-conclude_return("do you eat waffles")
+conclude_return("I hate school")
+  ╠═╡ =#
+
+# ╔═╡ 5e6f1031-42d3-49a2-994f-f0a79bab9cf2
+# ╠═╡ disabled = true
+# ╠═╡ skip_as_script = true
+#=╠═╡
+lemmatize("the books on the shelf are organized by genre")
+  ╠═╡ =#
+
+# ╔═╡ c03118f9-fbc0-44c9-aa26-d565dc4b26ed
+# ╠═╡ disabled = true
+# ╠═╡ skip_as_script = true
+#=╠═╡
+TextModels.predict(POStag_model, "the books on the shelf are organized by genre")
   ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1246,5 +1260,7 @@ version = "17.4.0+0"
 # ╠═4ba3d81d-365f-4670-af48-5c9a7ce1a7ae
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
 # ╠═e46b816f-c8ec-429f-a5e9-832776dce6de
+# ╠═5e6f1031-42d3-49a2-994f-f0a79bab9cf2
+# ╠═c03118f9-fbc0-44c9-aa26-d565dc4b26ed
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
