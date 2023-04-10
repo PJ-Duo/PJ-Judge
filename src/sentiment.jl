@@ -1,11 +1,11 @@
 ### A Pluto.jl notebook ###
-# v0.19.22
+# v0.19.23
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ efd8d226-8a5c-494d-a2c7-1cc337946b3d
-using BenchmarkTools, CorpusLoaders, Flux
+using BenchmarkTools, CorpusLoaders, Flux, Base.Iterators, Unicode, Flux
 
 # ╔═╡ 7c6fc6da-d495-11ed-378c-4716837d043b
 const STOPWORDS = Set(split(readlines(open("../data/stopwords/stopwords", "r"))[1]))
@@ -16,8 +16,154 @@ dataset_test_pos = load(IMDB("test_pos"))
 # ╔═╡ bfc011d1-2c0c-416a-adf2-4caecfc7eadd
 dataset_train_neg = load(IMDB("train_neg"))
 
+# ╔═╡ 92effb53-8701-4465-b962-14620e17ce36
+dataset_train_pos = load(IMDB()) 
+#no need to specify category because "train_pos" is default
+
 # ╔═╡ 5ca5aeb7-7bfb-421e-98bb-2ca08e1202ce
 dataset_test_neg = load(IMDB("test_neg"))
+
+# ╔═╡ e951860b-b734-402a-b136-d9397e1f97bd
+docs_train_pos = collect(take(dataset_train_pos, 2))
+
+# ╔═╡ 428dee0f-f799-41e5-babb-8f3c3d1384bc
+print(length(dataset_train_pos))
+
+# ╔═╡ f358a38f-713e-4c94-9c1d-12b1682891d4
+docs_train_neg = collect(take(dataset_train_neg, 2))
+
+
+# ╔═╡ 0a5df291-4072-4341-aee0-a826cf9216d3
+docs_test_pos = collect(take(dataset_test_pos, 2))
+
+# ╔═╡ 40f6125f-d51d-479a-b350-e1baf8568e1b
+docs_test_neg = collect(take(dataset_test_neg, 2))
+
+# ╔═╡ 09504305-769a-42d0-a266-a74f0989ec36
+#remove StopWords Function
+function removeStopWords(tokens)
+    filtered_sentence = []
+    for token in tokens
+        if  !(lowercase(token) in list_stopwords)
+            push!(filtered_sentence, lowercase(token))
+        end
+    end
+            
+    return filtered_sentence
+end
+
+# ╔═╡ 18b51910-a6da-4505-b10e-da462b35f2ab
+#remove Puncutation Function
+function convert_clean_arr(arr)
+    arr = string.(arr)
+    arr = Unicode.normalize.(arr, stripmark=true)
+    arr = map(x -> replace(x, r"[^a-zA-Z0-9_]" => ""), arr)
+    return arr
+end
+
+# ╔═╡ 8def1045-42f9-4d1e-9b97-3692648cb3b5
+train_set = [docs_train_pos; docs_train_neg]
+
+# ╔═╡ e29ddff3-c2ae-40e8-82c7-5578686678bb
+test_set = [docs_test_pos; docs_test_neg]
+
+# ╔═╡ 9424e1a3-2ed3-4be8-8532-cecbf48d3820
+all_letters = collect(Iterators.flatten(train_set));
+
+# ╔═╡ 208726a4-5aaa-4249-955e-b838b6ea08e6
+begin
+	vocab = Dict()
+	index = 1
+	for (item,v) in all_letters
+	    vocab[lowercase(item)] = index
+	    index = index + 1
+	end
+end
+
+# ╔═╡ ff2504a4-2cd7-4227-916a-e4a253397735
+reviews_index_vocab = []
+
+# ╔═╡ e45629d0-c684-49c4-97f6-5fed2225dc66
+for w in train_set[1]
+	lowercase_strings = [lowercase(s) for s in w]
+	get(vocab, lowercase_strings, 0)
+end
+
+# ╔═╡ 79e2a3a4-d558-4063-8b06-b4a2d4159537
+k=1
+
+# ╔═╡ 99a4446a-314f-4512-8d37-cd0b7d39a4d4
+for review in train_set
+    lowercase_strings = [lowercase(s) for s in review[k]]
+    r = [get(vocab, w, 0) for w in lowercase_strings]
+    push!(reviews_index_vocab, r)
+end
+
+
+# ╔═╡ 5356c105-3d7a-4c9f-b6b5-fa85880f647e
+test_index_vocab = []
+
+# ╔═╡ 8f1765b2-f86f-471c-8a9a-9fb251526233
+j = 1
+
+# ╔═╡ 156685f9-3315-412f-9c0c-5bea227117ee
+for review in test_set
+    lowercase_strings = [lowercase(s) for s in review[k]]
+    r = [get(vocab, w, 0) for w in lowercase_strings]
+    push!(test_index_vocab, r)
+end
+
+# ╔═╡ d3823ad4-7cec-4d15-a7cb-721524bec701
+print(test_index_vocab)
+
+# ╔═╡ 623e4ace-fb0f-45b9-91ba-12654fea48c7
+#pads sentence to certain length
+function pad_features(reviews_int, length_max)
+    features = []
+    for review_int in reviews_int
+        dim_review = size(review_int)[1]
+        pad_size = length_max-dim_review
+        if pad_size > 0
+            pad_array = zeros(Int64, pad_size)
+            result = append!(pad_array,review_int)
+        else
+            result = review_int[1:length_max]
+        end
+        push!(features, result)
+    end
+    return features
+end
+
+# ╔═╡ 85a62cba-634c-4201-b3be-b457c194bd0e
+model = Chain(
+LSTM(300, 128),
+LSTM(128,10),
+Dense(10, 2),
+softmax)
+
+# ╔═╡ 8af5830b-ec54-4ee7-b1d9-114f2ea1a6d1
+L(x, y) = Flux.mse(model(x), y)
+
+# ╔═╡ 960d935f-1307-4c77-a1a6-fef83e6e5715
+opt = ADAM(0.001)
+
+# ╔═╡ 912bc66d-57d9-4d3f-a1c0-177c4ff65fb3
+new_features = pad_features(reviews_index_vocab, 300);
+
+# ╔═╡ 111aa2d4-dfd7-44af-a000-f8ba43bc8dc7
+new_test_features = pad_features(test_index_vocab, 300);
+
+# ╔═╡ 39f7b8a9-0a14-4a18-83e0-9d340d6c3277
+prediction(i) = findmax(model(new_test_features[i]))[2]-1
+
+# ╔═╡ 01b252f5-3c5c-4e5e-88f5-cfb5d942f6c8
+print(docs_train_neg)
+
+# ╔═╡ 05f26f45-a038-43a6-a7bb-9f18e03994aa
+train_set_full = [ (new_features[i], train_label[i])  for i = 1:size(new_features)[1]];
+
+# ╔═╡ e3629abb-2862-4931-b2e6-18147109fb38
+test_set_full = [ (new_test_features[i], test_label[i])  for i = 1:size(new_test_features)[1]];
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -25,6 +171,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CorpusLoaders = "214a0ac2-f95b-54f7-a80b-442ed9c2c9e8"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
 [compat]
 BenchmarkTools = "~1.3.2"
@@ -38,7 +185,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "1569257632932cb1c05676e9e0cc533df30daeaf"
+project_hash = "0e0cdd6039b87abba72d0f37dff5f39f377acb85"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -980,6 +1127,36 @@ version = "17.4.0+0"
 # ╠═7c6fc6da-d495-11ed-378c-4716837d043b
 # ╠═abe011fa-a191-4dd1-a873-a7b0db773d5a
 # ╠═bfc011d1-2c0c-416a-adf2-4caecfc7eadd
+# ╠═92effb53-8701-4465-b962-14620e17ce36
 # ╠═5ca5aeb7-7bfb-421e-98bb-2ca08e1202ce
+# ╠═e951860b-b734-402a-b136-d9397e1f97bd
+# ╠═428dee0f-f799-41e5-babb-8f3c3d1384bc
+# ╠═f358a38f-713e-4c94-9c1d-12b1682891d4
+# ╠═0a5df291-4072-4341-aee0-a826cf9216d3
+# ╠═40f6125f-d51d-479a-b350-e1baf8568e1b
+# ╠═09504305-769a-42d0-a266-a74f0989ec36
+# ╠═18b51910-a6da-4505-b10e-da462b35f2ab
+# ╠═8def1045-42f9-4d1e-9b97-3692648cb3b5
+# ╠═e29ddff3-c2ae-40e8-82c7-5578686678bb
+# ╠═9424e1a3-2ed3-4be8-8532-cecbf48d3820
+# ╠═208726a4-5aaa-4249-955e-b838b6ea08e6
+# ╠═ff2504a4-2cd7-4227-916a-e4a253397735
+# ╠═e45629d0-c684-49c4-97f6-5fed2225dc66
+# ╠═79e2a3a4-d558-4063-8b06-b4a2d4159537
+# ╠═99a4446a-314f-4512-8d37-cd0b7d39a4d4
+# ╠═5356c105-3d7a-4c9f-b6b5-fa85880f647e
+# ╠═8f1765b2-f86f-471c-8a9a-9fb251526233
+# ╠═156685f9-3315-412f-9c0c-5bea227117ee
+# ╠═d3823ad4-7cec-4d15-a7cb-721524bec701
+# ╠═623e4ace-fb0f-45b9-91ba-12654fea48c7
+# ╠═85a62cba-634c-4201-b3be-b457c194bd0e
+# ╠═8af5830b-ec54-4ee7-b1d9-114f2ea1a6d1
+# ╠═960d935f-1307-4c77-a1a6-fef83e6e5715
+# ╠═39f7b8a9-0a14-4a18-83e0-9d340d6c3277
+# ╠═912bc66d-57d9-4d3f-a1c0-177c4ff65fb3
+# ╠═111aa2d4-dfd7-44af-a000-f8ba43bc8dc7
+# ╠═01b252f5-3c5c-4e5e-88f5-cfb5d942f6c8
+# ╠═05f26f45-a038-43a6-a7bb-9f18e03994aa
+# ╠═e3629abb-2862-4931-b2e6-18147109fb38
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
