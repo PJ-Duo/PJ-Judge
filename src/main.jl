@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.22
+# v0.19.24
 
 using Markdown
 using InteractiveUtils
@@ -220,12 +220,15 @@ TextModels.fit!(POStag_model, [Tuple{String, String}[(string(words_and_tags[i]),
 dataset = deleteat!(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)), [i for (i, row) in enumerate(eachrow(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)))) if isnothing(row[1])])
 
 # ╔═╡ 48dedd6a-0f7f-4cd0-b6a5-6822614bedb9
-for row in eachrow(dataset)
+for (i, row) in enumerate(eachrow(dataset))
 	row[1] = lemmatize(rm_oov_punc(lowercase(row[1])))
+	if row[1] == ""
+		deleterows!(dataset, row)
+	end
 end
 
 # ╔═╡ a64328d7-f0a8-40ec-b499-fcbc01db8d03
-df_NERified_arr = [filter(!isnothing, [ner_tag(ner_model, ent) for ent in tokenize(rm_oov_punc(lowercase(row.query)))]) for row in eachrow(dataset)]
+df_NERified_arr = [filter(!isnothing, [ner_tag(ner_model, ent) for ent in tokenize(row.query)]) for row in eachrow(dataset)]
 
 # ╔═╡ 4c020d02-3e1d-4ddc-b37c-2da431c5ca19
 df_NERified = dataset[setdiff(1:nrow(dataset), findall(x -> x == [], df_NERified_arr)), :]
@@ -262,7 +265,8 @@ function conclude_return(x)
 	input_nouns = nouns(y);
 	filtered_ds = (nrow(filtered_ds) == 0) ? filter((row) -> issubset(input_nouns, split(row.query)), dataset) : filtered_ds
 	y_countmap = collect(keys(countmap(tokenize(y))))
-	filtered_ds = length(tokenize(y)) >= 2 ? filter(row -> all(contains(rm_oov_punc(lowercase(row.query)), x) for x in y_countmap[1:2]), filtered_ds) : filter(row -> all(contains(rm_oov_punc(lowercase(row.query)), x) for x in y_countmap), filtered_ds)
+	filtered_ds = length(tokenize(y)) >= 2 ? filter(row -> all(contains(row.query, x) for x in y_countmap[1:2]), filtered_ds) : filter(row -> all(contains(row.query, x) for x in y_countmap), filtered_ds)
+	
 
 	if nrow(filtered_ds) == 0
 		return "Sorry, I'm not trained enough to answer that."
@@ -271,7 +275,7 @@ function conclude_return(x)
 	#@info "Processing cosine similiarty..."
 	sim_arr = Vector{Float64}()
 	for row in eachrow(filtered_ds)
-		x = lemmatize(rm_oov_punc(lowercase(row[1])))
+		x = row[1]
 		try
 			push!(sim_arr, dot(vectorize(x), vectorize(y)) / (norm(vectorize(x)) * norm(vectorize(y))))
 		catch
@@ -308,21 +312,7 @@ end
 # ╔═╡ e46b816f-c8ec-429f-a5e9-832776dce6de
 # ╠═╡ skip_as_script = true
 #=╠═╡
-conclude_return("I hate school")
-  ╠═╡ =#
-
-# ╔═╡ 5e6f1031-42d3-49a2-994f-f0a79bab9cf2
-# ╠═╡ disabled = true
-# ╠═╡ skip_as_script = true
-#=╠═╡
-lemmatize("the books on the shelf are organized by genre")
-  ╠═╡ =#
-
-# ╔═╡ c03118f9-fbc0-44c9-aa26-d565dc4b26ed
-# ╠═╡ disabled = true
-# ╠═╡ skip_as_script = true
-#=╠═╡
-TextModels.predict(POStag_model, "the books on the shelf are organized by genre")
+conclude_return("is chatgpt good")
   ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -354,7 +344,7 @@ Word2Vec = "~0.5.3"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.5"
+julia_version = "1.8.0"
 manifest_format = "2.0"
 project_hash = "003dbb51850c7b06043ea84c0ed04f3f13da9754"
 
@@ -481,7 +471,7 @@ version = "3.46.2"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.1+0"
+version = "0.5.2+0"
 
 [[deps.CorpusLoaders]]
 deps = ["CSV", "DataDeps", "Glob", "InternedStrings", "LightXML", "MultiResolutionIterators", "StringEncodings", "WordTokenizers"]
@@ -1107,7 +1097,7 @@ version = "1.10.1"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.1"
+version = "1.10.0"
 
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
@@ -1260,7 +1250,5 @@ version = "17.4.0+0"
 # ╠═4ba3d81d-365f-4670-af48-5c9a7ce1a7ae
 # ╠═bf60a9d5-4047-485e-9f91-a385703cd518
 # ╠═e46b816f-c8ec-429f-a5e9-832776dce6de
-# ╠═5e6f1031-42d3-49a2-994f-f0a79bab9cf2
-# ╠═c03118f9-fbc0-44c9-aa26-d565dc4b26ed
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
