@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.24
+# v0.19.25
 
 using Markdown
 using InteractiveUtils
@@ -217,14 +217,17 @@ TextModels.fit!(POStag_model, [Tuple{String, String}[(string(words_and_tags[i]),
 @info "STARTUP => loading the dataset..."
 
 # ╔═╡ 8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
-dataset = deleteat!(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)), [i for (i, row) in enumerate(eachrow(dropmissing!(CSV.read("../data/dataset.csv", DataFrame)))) if isnothing(row[1])])
+dataset = dropmissing!(CSV.read("../data/dataset.csv", DataFrame))
 
-# ╔═╡ 48dedd6a-0f7f-4cd0-b6a5-6822614bedb9
-for (i, row) in enumerate(eachrow(dataset))
-	row[1] = lemmatize(rm_oov_punc(lowercase(row[1])))
-	if row[1] == ""
-		deleterows!(dataset, row)
-	end
+# ╔═╡ 3fcab98d-9c9c-4981-94fd-ee1724e98e41
+for i in size(dataset, 1):-1:1
+    text = lowercase(dataset[i, 1])
+    lemmatized = lemmatize(rm_oov_punc(text))
+    if lemmatized == ""
+        deleteat!(dataset, i)
+    else
+        dataset[i, 1] = lemmatized
+    end
 end
 
 # ╔═╡ a64328d7-f0a8-40ec-b499-fcbc01db8d03
@@ -312,7 +315,7 @@ end
 # ╔═╡ e46b816f-c8ec-429f-a5e9-832776dce6de
 # ╠═╡ skip_as_script = true
 #=╠═╡
-conclude_return("is chatgpt good")
+conclude_return("I feel sick")
   ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -344,7 +347,7 @@ Word2Vec = "~0.5.3"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0"
+julia_version = "1.8.5"
 manifest_format = "2.0"
 project_hash = "003dbb51850c7b06043ea84c0ed04f3f13da9754"
 
@@ -471,7 +474,7 @@ version = "3.46.2"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.5.2+0"
+version = "1.0.1+0"
 
 [[deps.CorpusLoaders]]
 deps = ["CSV", "DataDeps", "Glob", "InternedStrings", "LightXML", "MultiResolutionIterators", "StringEncodings", "WordTokenizers"]
@@ -1097,7 +1100,7 @@ version = "1.10.1"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
+version = "1.10.1"
 
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
@@ -1241,7 +1244,7 @@ version = "17.4.0+0"
 # ╠═13ea869b-305d-4b0f-8e71-59dbf3dd7e9b
 # ╠═5f6b28f9-aba6-4f1d-a4f9-7fb29045c1d8
 # ╠═8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
-# ╠═48dedd6a-0f7f-4cd0-b6a5-6822614bedb9
+# ╠═3fcab98d-9c9c-4981-94fd-ee1724e98e41
 # ╠═a64328d7-f0a8-40ec-b499-fcbc01db8d03
 # ╠═4c020d02-3e1d-4ddc-b37c-2da431c5ca19
 # ╠═2d07cdec-bdce-4b3c-84fe-f5143d0de820
