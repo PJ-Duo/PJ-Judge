@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 13f35ab2-2f4f-4f93-95f4-f5043631da83
-using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis, TextModels, StatsBase
+using DataFrames, CSV, LinearAlgebra, Crayons, BenchmarkTools, Random, Word2Vec, TextAnalysis, TextModels, StatsBase, Dates, JSON, BSON, Flux
 
 # ╔═╡ b7198014-925c-4c55-b83a-7fe40898290a
 # ╠═╡ skip_as_script = true
@@ -124,6 +124,35 @@ function is_stopword(x)::Bool
     return x in STOPWORDS
 end
 
+# ╔═╡ 01321ada-fd71-4815-9ca8-bd0a5fbca3dc
+# sentiment analysis pad sequences
+function pad_sequences(l, maxlen=500)
+    if length(l) <= maxlen
+        res = zeros(maxlen - length(l))
+        for ele in l
+            push!(res, ele)
+        end
+        return res
+    end
+end
+
+# ╔═╡ b41e9756-76fa-4402-9b3e-22b9ab183051
+# sentiment analysis get embedding
+function embedding(embedding_matrix, x)
+    temp = embedding_matrix[:, Int64(x[1])+1]
+    for i=2:length(x)
+        temp = hcat(temp, embedding_matrix[:, Int64(x[i])+1])
+    end
+    return reshape(temp, reverse(size(temp)))
+end
+
+# ╔═╡ 9aae448f-d6a9-4779-af31-b27f0722b10d
+function flatten(x)
+    l = prod(size(x))
+    x = permutedims(x, reverse(range(1, length=ndims(x))))
+    return reshape(x, (l, 1))
+end
+
 # ╔═╡ baab8efa-e12d-403d-80ea-3b787d047456
 @info "STARTUP => loading word vecs..."
 
@@ -213,6 +242,48 @@ end
 # train the POStag_model with a pretrained file
 TextModels.fit!(POStag_model, [Tuple{String, String}[(string(words_and_tags[i]), string(words_and_tags[i+1])) for i=1:2:length(words_and_tags)-1] for words_and_tags in (split(sentence, " ") for sentence in readlines("../data/grammer/pos-pretrained"))])
 
+# ╔═╡ 036ab902-ef1e-4725-ab4b-31eae9b88f08
+@info "STARTUP => loading sentiment analysis..."
+
+# ╔═╡ bf18bbac-a9f7-441a-acf8-a0843e000254
+read_weights = BSON.load("../data/sentiment/model/sentiment-analysis-weights.bson")
+
+# ╔═╡ e3507858-f88f-4b6d-9fe7-efefc2ad25b1
+read_word_ids = JSON.parse(String(read(open("../data/sentiment/model/sentiment-analysis-word-to-id.json", "r"))))
+
+# ╔═╡ bbdf222e-9e8b-41f3-9c8d-956db7554ff0
+@info "STARTUP => Sentiment Analysis model trained with a $(length(read_word_ids)) word corpus!"
+
+# ╔═╡ da5b7ebe-93c3-4d48-8e2b-cd74c8fa36be
+function sensitize(x::AbstractString, out, unknowns=[])
+	model = (x,) -> begin
+    	a_1 = embedding(read_weights[:embedding_1]["embedding_1"]["embeddings:0"], x)
+    	a_2 = flatten(a_1)
+    	a_3 = Flux.Dense(read_weights[:dense_1]["dense_1"]["kernel:0"], read_weights[:dense_1]["dense_1"]["bias:0"], Flux.relu)(a_2)
+    	a_4 = Flux.Dense(read_weights[:dense_2]["dense_2"]["kernel:0"], read_weights[:dense_2]["dense_2"]["bias:0"], Flux.sigmoid)(a_3)
+    	return a_4
+    end
+    res = Array{Int, 1}()
+    for ele in tokenize(x)
+		if ele in keys(read_word_ids) && read_word_ids[ele] <= ( size(read_weights[:embedding_1]["embedding_1"]["embeddings:0"])[2] - 1)  
+            push!(res, read_word_ids[ele])
+		else
+			if !isempty(unknowns)
+	    		for words in unknowns(ele)
+					if words in keys(read_word_ids) && read_word_ids[words] <= size(read_weights[:embedding_1]["embedding_1"]["embeddings:0"])[2]
+		    			push!(res, read_word_ids[words])
+					end
+			    end
+			end
+		end
+    end
+	threshold = 0.53
+	if out == true
+		threshold = 0.57
+	end
+	if model(pad_sequences(res))[1] >= threshold return "negative" else return "positive" end
+end
+
 # ╔═╡ 5f6b28f9-aba6-4f1d-a4f9-7fb29045c1d8
 @info "STARTUP => loading the dataset..."
 
@@ -249,10 +320,13 @@ startup = readline()
 function conclude_return(x)
 	y = lemmatize(rm_oov_punc(lowercase(x)))
 
-	if isempty(strip(y))
-		return "Sorry, I don't understand. can you rephrase?"
+	if sensitize(y, false) == "negative"
+		return "I don't think I'm allowed to answer that."
 	end
 
+	if isempty(strip(y))
+		return "Sorry, I don't understand. Can you rephrase?"
+	end
 
 	# LAYER 1
 	# ranking => (4/4) fastest and high accuracy 
@@ -269,7 +343,6 @@ function conclude_return(x)
 	filtered_ds = (nrow(filtered_ds) == 0) ? filter((row) -> issubset(input_nouns, split(row.query)), dataset) : filtered_ds
 	y_countmap = collect(keys(countmap(tokenize(y))))
 	filtered_ds = length(tokenize(y)) >= 2 ? filter(row -> all(contains(row.query, x) for x in y_countmap[1:2]), filtered_ds) : filter(row -> all(contains(row.query, x) for x in y_countmap), filtered_ds)
-	
 
 	if nrow(filtered_ds) == 0
 		return "Sorry, I'm not trained enough to answer that."
@@ -287,7 +360,12 @@ function conclude_return(x)
 		
 		if length(sim_arr) == nrow(filtered_ds)
 			if maximum(sim_arr) >= 0.5
-				return filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2]
+				output = filtered_ds[findfirst(x -> x == maximum(sim_arr), sim_arr), 2]
+				#if sensitize(output, true) == "negative"
+				#	return "I'm not quite sure how to answer that."
+				#else
+					return output
+				#end
 			else
 				return "Sorry, I'm not sure if I have the right answer to that."
 			end
@@ -305,8 +383,6 @@ if lowercase(startup) == "chat"
 			@info "=> Empty input string"
 			continue
 		end
-
-		println(Crayon(foreground = :red), Crayon(bold = true), "return> ", Crayon(reset = true), conclude_return(chatInput))
 	end
 elseif lowercase(startup) == "exit"
 	exit()
@@ -315,16 +391,20 @@ end
 # ╔═╡ e46b816f-c8ec-429f-a5e9-832776dce6de
 # ╠═╡ skip_as_script = true
 #=╠═╡
-conclude_return("I feel sick")
+conclude_return("how are you")
   ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
@@ -333,10 +413,13 @@ TextModels = "77b9cbda-2a23-51df-82a3-24144d1cd378"
 Word2Vec = "c64b6f0f-98cd-51d1-af78-58ae84944834"
 
 [compat]
+BSON = "~0.3.7"
 BenchmarkTools = "~1.3.2"
 CSV = "~0.10.9"
 Crayons = "~4.1.1"
 DataFrames = "~1.3.6"
+Flux = "~0.12.8"
+JSON = "~0.21.4"
 StatsBase = "~0.33.21"
 TextAnalysis = "~0.7.3"
 TextModels = "~0.1.1"
@@ -349,7 +432,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "003dbb51850c7b06043ea84c0ed04f3f13da9754"
+project_hash = "74f1b73e1b51c7587494590365a7d18a4690a742"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -704,9 +787,9 @@ version = "1.4.1"
 
 [[deps.JSON]]
 deps = ["Dates", "Mmap", "Parsers", "Unicode"]
-git-tree-sha1 = "3c837543ddb02250ef42f4738347454f95079d4e"
+git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "0.21.3"
+version = "0.21.4"
 
 [[deps.Juno]]
 deps = ["Base64", "Logging", "Media", "Profile"]
@@ -1232,6 +1315,9 @@ version = "17.4.0+0"
 # ╠═ee84f78e-c83f-4102-8cf7-64c2cd390ffc
 # ╠═589917d6-aa38-4fda-96b1-4a0915895ffd
 # ╠═d6f94c81-37b6-400e-b9f3-78d6bb760f44
+# ╠═01321ada-fd71-4815-9ca8-bd0a5fbca3dc
+# ╠═b41e9756-76fa-4402-9b3e-22b9ab183051
+# ╠═9aae448f-d6a9-4779-af31-b27f0722b10d
 # ╠═372dbfac-2aa8-4016-912c-5439e5969c08
 # ╠═baab8efa-e12d-403d-80ea-3b787d047456
 # ╠═dafe5b70-0192-401a-8cb7-cf9f47615b8a
@@ -1242,6 +1328,11 @@ version = "17.4.0+0"
 # ╠═2a091f42-cc41-43f2-9055-c2b943dd3e79
 # ╠═780a5852-6c09-46f3-bc06-ff19c6caa112
 # ╠═13ea869b-305d-4b0f-8e71-59dbf3dd7e9b
+# ╠═036ab902-ef1e-4725-ab4b-31eae9b88f08
+# ╠═bbdf222e-9e8b-41f3-9c8d-956db7554ff0
+# ╠═bf18bbac-a9f7-441a-acf8-a0843e000254
+# ╠═e3507858-f88f-4b6d-9fe7-efefc2ad25b1
+# ╠═da5b7ebe-93c3-4d48-8e2b-cd74c8fa36be
 # ╠═5f6b28f9-aba6-4f1d-a4f9-7fb29045c1d8
 # ╠═8e7d3f84-6c3b-42a0-a05c-8f5926b557b2
 # ╠═3fcab98d-9c9c-4981-94fd-ee1724e98e41
